@@ -42,9 +42,9 @@ uint32_t ACAN2517Settings::sysClock (const Oscillator inOscillator) {
 ACAN2517Settings::ACAN2517Settings (const Oscillator inOscillator,
                                     const uint32_t inDesiredBitRate,
                                     const uint32_t inTolerancePPM) :
-mOscillator (inOscillator),
 mSysClock (sysClock (inOscillator)),
-mDesiredBitRate (inDesiredBitRate) {
+mDesiredBitRate (inDesiredBitRate),
+mOscillator (inOscillator) {
   const uint32_t maxTQCount = MAX_PHASE_SEGMENT_1 + MAX_PHASE_SEGMENT_2 + 1 ; // Setting for slowest bit rate
   uint32_t BRP = MAX_BRP ;
   uint32_t smallestError = UINT32_MAX ;
@@ -72,7 +72,7 @@ mDesiredBitRate (inDesiredBitRate) {
       }
     }
   //--- Continue with next value of BRP
-    BRP -- ;
+    BRP -= 1 ;
     TQCount = (BRP == 0) ? (maxTQCount + 1) : (mSysClock / inDesiredBitRate / BRP) ;
   }
 //--- Compute PS2 (1 <= PS2 <= 128)

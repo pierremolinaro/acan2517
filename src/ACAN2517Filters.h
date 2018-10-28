@@ -1,25 +1,23 @@
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // An utility class for:
 //   - ACAN2517 CAN driver for MCP2517FD (CAN 2.0B mode)
-//   - ACAN2517FD CAN driver for MCP2517FD (CANFD mode)
 // by Pierre Molinaro
 // https://github.com/pierremolinaro/acan2517
-// https://github.com/pierremolinaro/acan2517FD
 //
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
-#ifndef MCP2517FD_FILTERS_CLASS_DEFINED
-#define MCP2517FD_FILTERS_CLASS_DEFINED
+#ifndef ACAN2517_FILTERS_CLASS_DEFINED
+#define ACAN2517_FILTERS_CLASS_DEFINED
 
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 #include <CANMessage.h>
 
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-//  MCP2517Filters class
+//  ACAN2517Filters class
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
-class MCP2517Filters {
+class ACAN2517Filters {
 
 //······················································································································
 //   EMBEDDED CLASS
@@ -64,13 +62,13 @@ class MCP2517Filters {
 //   CONSTRUCTOR
 //······················································································································
 
-  public: MCP2517Filters (void) {}
+  public: ACAN2517Filters (void) {}
 
 //······················································································································
 //   DESTRUCTOR
 //······················································································································
 
-  public: ~ MCP2517Filters (void) {
+  public: ~ ACAN2517Filters (void) {
     while (mFirstFilter != NULL) {
       Filter * next = mFirstFilter->mNextFilter ;
       delete mFirstFilter ;
@@ -200,6 +198,13 @@ class MCP2517Filters {
   private: Filter * mLastFilter  = NULL ;
   private: FilterStatus mFilterStatus = kFiltersOk ;
   private: uint8_t mFilterErrorIndex = 0 ;
+
+//······················································································································
+//   NO COPY
+//······················································································································
+
+  private: ACAN2517Filters (const ACAN2517Filters &) ;
+  private: ACAN2517Filters & operator = (const ACAN2517Filters &) ;
 
 //······················································································································
 // Friend

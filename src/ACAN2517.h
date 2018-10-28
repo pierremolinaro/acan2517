@@ -11,7 +11,7 @@
 
 #include <ACAN2517Settings.h>
 #include <ACANBuffer.h>
-#include <MCP2517Filters.h>
+#include <ACAN2517Filters.h>
 #include <SPI.h>
 
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -37,7 +37,7 @@ class ACAN2517 {
 
   public: uint32_t begin (const ACAN2517Settings & inSettings,
                           void (* inInterruptServiceRoutine) (void),
-                          const MCP2517Filters & inFilters) ;
+                          const ACAN2517Filters & inFilters) ;
 
 //--- Error code returned by begin
   public: static const uint32_t kRequestedConfigurationModeTimeOut  = 1 <<  0 ;

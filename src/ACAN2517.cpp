@@ -111,7 +111,7 @@ mDriverTransmitBuffer () {
 uint32_t ACAN2517::begin (const ACAN2517Settings & inSettings,
                           void (* inInterruptServiceRoutine) (void)) {
 //--- Add pass-all filter
-  MCP2517Filters filters ;
+  ACAN2517Filters filters ;
   filters.appendPassAllFilter (NULL) ;
 //---
   return begin (inSettings, inInterruptServiceRoutine, filters) ;
@@ -121,7 +121,7 @@ uint32_t ACAN2517::begin (const ACAN2517Settings & inSettings,
 
 uint32_t ACAN2517::begin (const ACAN2517Settings & inSettings,
                           void (* inInterruptServiceRoutine) (void),
-                          const MCP2517Filters & inFilters) {
+                          const ACAN2517Filters & inFilters) {
   uint32_t errorCode = 0 ; // Means no error
 //----------------------------------- If ok, check if settings are correct
   if (!inSettings.mBitRateClosedToDesiredRate) {
@@ -175,7 +175,7 @@ uint32_t ACAN2517::begin (const ACAN2517Settings & inSettings,
   if (inFilters.filterCount () > 32) {
     errorCode |= kMoreThan32Filters ;
   }
-  if (inFilters.filterStatus () != MCP2517Filters::kFiltersOk) {
+  if (inFilters.filterStatus () != ACAN2517Filters::kFiltersOk) {
     errorCode |= kFilterDefinitionError ;
   }
 //----------------------------------- CS pin
@@ -319,7 +319,7 @@ uint32_t ACAN2517::begin (const ACAN2517Settings & inSettings,
     writeByteRegister (C1FIFOCON_REGISTER (2), d) ;
   //----------------------------------- Configure receive filters
     uint8_t filterIndex = 0 ;
-    MCP2517Filters::Filter * filter = inFilters.mFirstFilter ;
+    ACAN2517Filters::Filter * filter = inFilters.mFirstFilter ;
     mCallBackFunctionArray = new ACANCallBackRoutine [inFilters.filterCount ()] ;
     while (NULL != filter) {
       mCallBackFunctionArray [filterIndex] = filter->mCallBackRoutine ;

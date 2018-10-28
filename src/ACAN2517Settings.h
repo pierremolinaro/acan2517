@@ -21,7 +21,7 @@ class ACAN2517Settings {
 //   ENUMERATED TYPES
 //······················································································································
 
-  public: typedef enum {
+  public: typedef enum : uint8_t {
     OSC_4MHz,
     OSC_4MHz_DIVIDED_BY_2,
     OSC_4MHz10xPLL,
@@ -32,16 +32,25 @@ class ACAN2517Settings {
     OSC_40MHz_DIVIDED_BY_2
   } Oscillator ;
 
-  public: typedef enum {CLKO_DIVIDED_BY_1, CLKO_DIVIDED_BY_2, CLKO_DIVIDED_BY_4, CLKO_DIVIDED_BY_10, SOF} CLKOpin ;
+  public: typedef enum : uint8_t {
+    CLKO_DIVIDED_BY_1,
+    CLKO_DIVIDED_BY_2,
+    CLKO_DIVIDED_BY_4,
+    CLKO_DIVIDED_BY_10, SOF
+  } CLKOpin ;
 
-  public: typedef enum {
-    InternalLoopBackMode = 2,
-    ExternalLoopBackMode = 5,
-    ListenOnlyMode = 3,
-    NormalMode = 6
+  public: typedef enum : uint8_t {
+    InternalLoopBack = 2,
+    ExternalLoopBack = 5,
+    ListenOnly = 3,
+    Normal20B = 6
   } RequestedMode ;
 
-  public: typedef enum {Disabled, ThreeAttempts, UnlimitedNumber} RetransmissionAttempts ;
+  public: typedef enum : uint8_t {
+    Disabled,
+    ThreeAttempts,
+    UnlimitedNumber
+  } RetransmissionAttempts ;
 
 //······················································································································
 //   CONSTRUCTOR
@@ -55,30 +64,14 @@ class ACAN2517Settings {
 //   CAN BIT TIMING
 //······················································································································
 
-  private: Oscillator mOscillator ;
   private: uint32_t mSysClock ; // In Hz
   public: const uint32_t mDesiredBitRate ; // In kb/s
   public: uint16_t mBitRatePrescaler = 0 ; // 1...256
   public: uint16_t mPhaseSegment1 = 0 ; // 2...256
   public: uint8_t mPhaseSegment2 = 0 ; // 1...128
   public: uint8_t mSJW = 0 ; // 1...128
+  private: Oscillator mOscillator ;
   public: bool mBitRateClosedToDesiredRate = false ; // The above configuration is not correct
-
-//······················································································································
-//    SYSCLOCK frequency computation
-//······················································································································
-
-  public: static uint32_t sysClock (const Oscillator inOscillator) ;
-
-//······················································································································
-//    Accessors
-//······················································································································
-
-  public: Oscillator oscillator (void) const { return mOscillator ; }
-  public: uint32_t sysClock (void) const { return mSysClock ; }
-  public: uint32_t ramUsage (void) const ;
-  public: uint32_t actualBitRate (void) const ;
-  public: bool exactBitRate (void) const ;
 
 //······················································································································
 //    TXCAN pin is Open Drain ?
@@ -96,7 +89,7 @@ class ACAN2517Settings {
 //    Requested mode
 //······················································································································
 
-  public: RequestedMode mRequestedMode = NormalMode ;
+  public: RequestedMode mRequestedMode = Normal20B ;
 
 //······················································································································
 //   TRANSMIT FIFO
@@ -138,6 +131,22 @@ class ACAN2517Settings {
 
 //--- Controller receive FIFO size
   public: uint8_t mControllerReceiveFIFOSize = 32 ; // 1 ... 32
+
+//······················································································································
+//    SYSCLOCK frequency computation
+//······················································································································
+
+  public: static uint32_t sysClock (const Oscillator inOscillator) ;
+
+//······················································································································
+//    Accessors
+//······················································································································
+
+  public: Oscillator oscillator (void) const { return mOscillator ; }
+  public: uint32_t sysClock (void) const { return mSysClock ; }
+  public: uint32_t ramUsage (void) const ;
+  public: uint32_t actualBitRate (void) const ;
+  public: bool exactBitRate (void) const ;
 
 //······················································································································
 //    Distance between actual bit rate and requested bit rate (in ppm, part-per-million)

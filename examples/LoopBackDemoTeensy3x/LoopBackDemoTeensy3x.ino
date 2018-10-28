@@ -63,9 +63,12 @@ void setup () {
 //----------------------------------- Begin SPI1
   SPI1.begin () ;
 //--- Configure ACAN2517
+  Serial.print ("sizeof (ACAN2517Settings): ") ;
+  Serial.print (sizeof (ACAN2517Settings)) ;
+  Serial.println (" bytes") ;
   Serial.println ("Configure ACAN2517") ;
   ACAN2517Settings settings (ACAN2517Settings::OSC_4MHz10xPLL, 125 * 1000) ; // CAN bit rate 125 kb/s
-  settings.mRequestedMode = ACAN2517Settings::InternalLoopBackMode ; // Select loopback mode
+  settings.mRequestedMode = ACAN2517Settings::InternalLoopBack ; // Select loopback mode
   const uint32_t errorCode = can.begin (settings, [] { can.isr () ; }) ;
   if (errorCode == 0) {
     Serial.print ("Bit Rate prescaler: ") ;

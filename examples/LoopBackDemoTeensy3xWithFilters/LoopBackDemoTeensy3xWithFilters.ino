@@ -72,14 +72,14 @@ void setup () {
 //----------------------------------- Configure ACAN2517
   Serial.println ("Configure ACAN2517") ;
   ACAN2517Settings settings (ACAN2517Settings::OSC_4MHz10xPLL, 125 * 1000) ; // CAN bit rate 125 kb/s
-  settings.mRequestedMode = ACAN2517Settings::InternalLoopBackMode ; // Select loopback mode
+  settings.mRequestedMode = ACAN2517Settings::InternalLoopBack; // Select loopback mode
 //----------------------------------- Append filters
-  MCP2517Filters filters ;
+  ACAN2517Filters filters ;
   filters.appendFrameFilter (kStandard, 0x123, receiveFromFilter0) ; // Filter #0: receive standard frame with identifier 0x123
   filters.appendFrameFilter (kExtended, 0x12345678, receiveFromFilter1) ; // Filter #1: receive extended frame with identifier 0x12345678
   filters.appendFilter (kStandard, 0x70F, 0x304, receiveFromFilter2) ; // Filter #2: receive standard frame with identifier 0x3n4
 //----------------------------------- Filters ok ?
-  if (filters.filterStatus () != MCP2517Filters::kFiltersOk) {
+  if (filters.filterStatus () != ACAN2517Filters::kFiltersOk) {
     Serial.print ("Error filter ") ;
     Serial.print (filters.filterErrorIndex ()) ;
     Serial.print (": ") ;
