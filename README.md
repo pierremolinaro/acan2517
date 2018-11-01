@@ -3,12 +3,12 @@
 
 ### Compatibility with the other ACAN libraries
 
-This library is fully compatible with the Teensy 3.x ACAN library [https://github.com/pierremolinaro/acan](), ACAN 2515 library [https://github.com/pierremolinaro/acan2515](), it uses a very similar API and the same `CANMessage` class for handling messages.
+This library is fully compatible with the Teensy 3.x ACAN library [https://github.com/pierremolinaro/acan](), ACAN2515 library [https://github.com/pierremolinaro/acan2515](), and the ACAN2517FD library [https://github.com/pierremolinaro/acan2517](), it uses a very similar API and the same `CANMessage` class for handling messages.
 
 ### ACAN2517 library description
 ACAN2517 is a driver for the MCP2517FD CAN Controller, in CAN 2.0B mode. It runs on any Arduino compatible board.
 
-> The ACAN2517FD library handles the MCP2517FD CAN Controller, in CANFD mode.
+> The ACAN2517FD library handles the MCP2517FD CAN Controller, in CAN FD mode.
 
 
 The library supports the 4MHz, 20 MHz and 40 MHz oscillator clock.
@@ -32,7 +32,7 @@ Configuration is a four-step operation.
 static const byte MCP2517_CS  = 20 ; // CS input of MCP2517FD, adapt to your design
 static const byte MCP2517_INT = 37 ; // INT output of MCP2517FD, adapt to your design
 
-ACAN2517 can (MCP2517_CS, SPI, MCP2517_INT) ; // You can use SPI2, SPI3, if provided by your microcontroller
+ACAN2517FD can (MCP2517_CS, SPI, MCP2517_INT) ; // You can use SPI2, SPI3, if provided by your microcontroller
 
 void setup () {
   Serial.begin (9600) ;
