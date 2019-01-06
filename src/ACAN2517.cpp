@@ -422,8 +422,12 @@ void ACAN2517::appendInControllerTxFIFO (const CANMessage & inMessage) {
   const uint16_t ramAddress = (uint16_t) (0x400 + readRegisterSPI (C1FIFOUA_REGISTER (2))) ;
   assertCS () ;
     writeCommandSPI (ramAddress) ;
-  //--- Write identifier (see DS20005678A, page 25)
-    writeWordSPI (inMessage.id) ;
+    //--- Write identifier: if an extended frame is sent, identifier bits sould be reordered (see DS20005678B, page 27)
+      uint32_t idf = inMessage.id ;
+      if (inMessage.ext) {
+        idf = ((inMessage.id >> 18) & 0x7FF) | ((inMessage.id & 0x3FFFF) << 11) ;
+      }
+      writeWordSPI (idf) ;
   //--- Write DLC, RTR, IDE bits
     uint32_t data = (inMessage.len > 8) ? 8 : inMessage.len ;
     if (inMessage.rtr) {
@@ -451,8 +455,12 @@ bool ACAN2517::sendViaTXQ (const CANMessage & inMessage) {
     const uint16_t ramAddress = (uint16_t) (0x400 + readRegisterSPI (C1TXQUA_REGISTER)) ;
     assertCS () ;
       writeCommandSPI (ramAddress) ;
-    //--- Write identifier (see DS20005678A, page 25)
-      writeWordSPI (inMessage.id) ;
+    //--- Write identifier: if an extended frame is sent, identifier bits sould be reordered (see DS20005678B, page 27)
+      uint32_t idf = inMessage.id ;
+      if (inMessage.ext) {
+        idf = ((inMessage.id >> 18) & 0x7FF) | ((inMessage.id & 0x3FFFF) << 11) ;
+      }
+      writeWordSPI (idf) ;
     //--- Write DLC, RTR, IDE bits
       uint32_t data = (inMessage.len > 8) ? 8 : inMessage.len ;
       if (inMessage.rtr) {
@@ -562,7 +570,7 @@ void ACAN2517::receiveInterrupt (void) {
   CANMessage message ;
   assertCS () ;
     readCommandSPI (ramAddress) ;
-  //--- Read identifier (see DS20005678A, page 42)
+  //--- Read identifier (see DS20005678B, page 42)
     message.id = readWordSPI () ;
   //--- Read DLC, RTR, IDE bits, and math filter index
     const uint32_t data = readWordSPI () ;
@@ -574,6 +582,11 @@ void ACAN2517::receiveInterrupt (void) {
     message.data32 [0] = readWordSPI () ;
     message.data32 [1] = readWordSPI () ;
   deassertCS () ;
+//--- If an extended frame is received, identifier bits sould be reordered (see DS20005678B, page 42)
+  if (message.ext) {
+    const uint32_t tempID = message.id ;
+    message.id = ((tempID >> 11) & 0x3FFFF) | ((tempID & 0x7FF) << 18) ;
+  }
 //--- Append message to driver receive FIFO
   mDriverReceiveBuffer.append (message) ;
 //--- Increment FIFO

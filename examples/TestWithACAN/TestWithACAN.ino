@@ -109,6 +109,11 @@ static unsigned gSentFrameCount2517 = 0 ;
 
 static const unsigned MESSAGE_COUNT = 10 * 1000 ;
 
+static CANMessage gMessageSentByMCP2517 ;
+static bool gMCP2517ReadyToSend = true ;
+static CANMessage gMessageSentByTeensy ;
+static bool gTeensyReadyToSend = true ;
+
 //——————————————————————————————————————————————————————————————————————————————
 // A CAN network requires that stations do not send frames with the same identifier.
 // So: 
@@ -128,48 +133,82 @@ void loop () {
     Serial.print (" ") ;
     Serial.println (gReceivedFrameCount2517) ;
   }
-  CANMessage frame ;
 //--- Send messages via the MCP2517
-  if (gSentFrameCount2517 < MESSAGE_COUNT) {
+  if (gMCP2517ReadyToSend && (gSentFrameCount2517 < MESSAGE_COUNT)) {
   //--- Make an even identifier for MCP2517
-    frame.id = millis () & 0x7FE ;
-    frame.len = 8 ;
+    gMessageSentByMCP2517.id = 1 << (gSentFrameCount2517 % 29) ; // millis () & 0x1FFFFFFE ;
+    gMessageSentByMCP2517.len = 8 ;
+    gMessageSentByMCP2517.ext = true ;
     for (uint8_t i=0 ; i<8 ; i++) {
-      frame.data [i] = i ;
+      gMessageSentByMCP2517.data [i] = i ;
     }
   //--- Send frame via MCP2517
-    const bool ok = can.tryToSend (frame) ;
+    const bool ok = can.tryToSend (gMessageSentByMCP2517) ;
     if (ok) {
       gSentFrameCount2517 += 1 ;
+      gMCP2517ReadyToSend = false ;
     }
   }
 //--- Send messages via the builtin CAN0
-  if (gSentFrameCount < MESSAGE_COUNT) {
+  if (gTeensyReadyToSend && (gSentFrameCount < MESSAGE_COUNT)) {
   //--- Make an odd identifier for builtin CAN0
-    frame.id = (millis () & 0x7FE) | 1 ;
-    frame.len = 8 ;
+    gMessageSentByTeensy.id = 1 << (gReceivedFrameCount2517 % 29) ; // (millis () & 0x1FFFFFFE) | 1 ;
+    gMessageSentByTeensy.len = 8 ;
+    gMessageSentByTeensy.ext = true ;
   //--- Send frame via builtin CAN0
-    const bool ok = ACAN::can0.tryToSend (frame) ;
+    const bool ok = ACAN::can0.tryToSend (gMessageSentByTeensy) ;
     if (ok) {
       gSentFrameCount += 1 ;
+      gTeensyReadyToSend = false ;
     }
   }
 //--- Receive frame from MCP2517
+  CANMessage frame ;
   if (can.receive (frame)) {
-//    can.receive (frame) ;
     gReceivedFrameCount2517 ++ ;
+    bool ok = gMessageSentByTeensy.ext == frame.ext ;
+    if (ok) {
+      ok = gMessageSentByTeensy.id == frame.id ;
+    }
+    if (ok) {
+      gTeensyReadyToSend = true ;
+    }else{
+      Serial.print ("MCP2517 Reception error: ext ") ;
+      Serial.print (gMessageSentByTeensy.ext) ;
+      Serial.print (" -> ") ;
+      Serial.println (frame.ext) ;
+      Serial.print ("MCP2517 Reception error: id ") ;
+      Serial.print (gMessageSentByTeensy.id, HEX) ;
+      Serial.print (" -> ") ;
+      Serial.println (frame.id, HEX) ;    
+    }
   }
 //--- Receive frame via builtin CAN0
   if (ACAN::can0.available ()) {
     ACAN::can0.receive (frame) ;
+    gReceivedFrameCount ++ ;
     bool ok = frame.len == 8 ;
     for (uint8_t i=0 ; (i<8) && ok ; i++) {
       ok = frame.data [i] == i ;
     }
-    if (!ok) {
-      Serial.println ("RECEIVED DATA ERROR") ;
+    if (ok) {
+      ok = gMessageSentByMCP2517.ext == frame.ext ;
     }
-    gReceivedFrameCount ++ ;
+    if (ok) {
+      ok = gMessageSentByMCP2517.id == frame.id ;
+    }
+    if (ok) {
+      gMCP2517ReadyToSend = true ;
+    }else{
+      Serial.print ("Teensy Reception error: ext ") ;
+      Serial.print (gMessageSentByMCP2517.ext) ;
+      Serial.print (" -> ") ;
+      Serial.println (frame.ext) ;
+      Serial.print ("Teensy Reception error: id ") ;
+      Serial.print (gMessageSentByMCP2517.id, HEX) ;
+      Serial.print (" -> ") ;
+      Serial.println (frame.id, HEX) ;    
+    }
   }
 }
 
