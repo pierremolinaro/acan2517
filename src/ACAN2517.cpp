@@ -284,10 +284,6 @@ uint32_t ACAN2517::begin (const ACAN2517Settings & inSettings,
       d |= 1 << 4 ; // TXCANOD
     }
     writeByteRegister (IOCON_REGISTER + 3, d); // DS20005688B, page 18
-  //----------------------------------- Configure C1DTC (DS20005688B, page 29)
-//     data = 1 << 25 ; // Enable Edge Filtering during Bus Integration state bit
-//     data |= 1 << 17 ; // Auto TDC
-//     writeRegister (C1TDC_REGISTER, data);
   //----------------------------------- Configure TXQ
     d = inSettings.mControllerTXQBufferRetransmissionAttempts ;
     d <<= 5 ;
