@@ -49,11 +49,6 @@ ACAN2517 can (MCP2517_CS, SPI1, MCP2517_INT) ;
 //——————————————————————————————————————————————————————————————————————————————
 
 void setup () {
-  pinMode (3, OUTPUT) ;
-  pinMode (4, OUTPUT) ;
-  pinMode (5, OUTPUT) ;
-  pinMode (6, OUTPUT) ;
-  pinMode (7, OUTPUT) ;
 //--- Switch on builtin led
   pinMode (LED_BUILTIN, OUTPUT) ;
   digitalWrite (LED_BUILTIN, HIGH) ;
@@ -107,7 +102,7 @@ static unsigned gReceivedFrameCount2517 = 0 ;
 static unsigned gSentFrameCount = 0 ;
 static unsigned gSentFrameCount2517 = 0 ;
 
-static const unsigned MESSAGE_COUNT = 10 * 1000 ;
+static const unsigned MESSAGE_COUNT = 100 * 1000 ;
 
 static CANMessage gMessageSentByMCP2517 ;
 static bool gMCP2517ReadyToSend = true ;

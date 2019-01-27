@@ -124,7 +124,7 @@ class ACAN2517Filters {
     }
   //--- Re order bits if extended filter
     const uint32_t mask = (1 << 30) | ((inFormat == kExtended) ? 0x1FFFFFFF : 0x7FF) ;
-    uint32_t acceptance ; // = ((inFormat == kExtended) ? (1 << 30) : 0) | inAcceptance ;
+    uint32_t acceptance ;
     if (inFormat == kExtended) {
       acceptance = ((inIdentifier >> 18) & 0x7FF) | ((inIdentifier & 0x3FFFF) << 11) | (1 << 30) ;
     }else{
@@ -179,7 +179,7 @@ class ACAN2517Filters {
     }else{
       mask |= inMask ;
     }
-    uint32_t acceptance ; // = ((inFormat == kExtended) ? (1 << 30) : 0) | inAcceptance ;
+    uint32_t acceptance ;
     if (inFormat == kExtended) {
       acceptance = ((inAcceptance >> 18) & 0x7FF) | ((inAcceptance & 0x3FFFF) << 11) | (1 << 30) ;
     }else{
