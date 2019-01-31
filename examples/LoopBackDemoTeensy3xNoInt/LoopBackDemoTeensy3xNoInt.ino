@@ -1,45 +1,31 @@
 //——————————————————————————————————————————————————————————————————————————————
-//  ACAN2517 Demo in loopback mode, for ESP32
-//——————————————————————————————————————————————————————————————————————————————
-
-#ifndef ARDUINO_ARCH_ESP32
-  #error "Select an ESP32 board" 
-#endif
-
+//  ACAN2517 Demo in loopback mode, using hardware SPI1, without an external interrupt
 //——————————————————————————————————————————————————————————————————————————————
 
 #include <ACAN2517.h>
-#include <SPI.h>
 
 //——————————————————————————————————————————————————————————————————————————————
-//  For using SPI on ESP32, see demo sketch SPI_Multiple_Buses
-//  Two SPI busses are available in Arduino, HSPI and VSPI.
-//  By default, Arduino SPI use VSPI, leaving HSPI unused.
-//  Default VSPI pins are: SCK=18, MISO=19, MOSI=23.
-//  You can change the default pin with additional begin arguments
-//    SPI.begin (MCP2517_SCK, MCP2517_MISO, MCP2517_MOSI)
+//  MCP2517 connections: adapt theses settings to your design
+//  As hardware SPI is used, you should select pins that support SPI functions.
+//  This sketch is designed for a Teensy 3.5, using SPI1
+//  But standard Teensy 3.5 SPI1 pins are not used
+//    SCK input of MCP2517 is connected to pin #32
+//    SDI input of MCP2517 is connected to pin #0
+//    SDO output of MCP2517 is connected to pin #1
 //  CS input of MCP2517 should be connected to a digital output port
-//  INT output of MCP2517 should be connected to a digital input port, with interrupt capability
-//  Notes:
-//    - GPIOs 34 to 39 are GPIs – input only pins. These pins don’t have internal pull-ups or
-//      pull-down resistors. They can’t be used as outputs.
-//    - some pins do not support INPUT_PULLUP (see https://www.esp32.com/viewtopic.php?t=439) 
-//    - All GPIOs can be configured as interrupts
-// See https://randomnerdtutorials.com/esp32-pinout-reference-gpios/
 //——————————————————————————————————————————————————————————————————————————————
 
-static const byte MCP2517_SCK  = 26 ; // SCK input of MCP2517 
-static const byte MCP2517_MOSI = 19 ; // SDI input of MCP2517  
-static const byte MCP2517_MISO = 18 ; // SDO output of MCP2517 
+static const byte MCP2517_SCK = 32 ; // SCK input of MCP2517 
+static const byte MCP2517_SDI =  0 ; // SDI input of MCP2517  
+static const byte MCP2517_SDO =  1 ; // SDO output of MCP2517 
 
-static const byte MCP2517_CS  = 16 ; // CS input of MCP2517 
-static const byte MCP2517_INT = 32 ; // INT output of MCP2517
+static const byte MCP2517_CS  = 31 ; // CS input of MCP2517
 
 //——————————————————————————————————————————————————————————————————————————————
-//  ACAN2517 Driver object
+//  MCP2517 Driver object
 //——————————————————————————————————————————————————————————————————————————————
 
-ACAN2517 can (MCP2517_CS, SPI, MCP2517_INT) ;
+ACAN2517 can (MCP2517_CS, SPI1, 255) ; // Last argument is 255 -> no interrupt pin
 
 //——————————————————————————————————————————————————————————————————————————————
 //   SETUP
@@ -50,14 +36,30 @@ void setup () {
   pinMode (LED_BUILTIN, OUTPUT) ;
   digitalWrite (LED_BUILTIN, HIGH) ;
 //--- Start serial
-  Serial.begin (115200) ;
+  Serial.begin (38400) ;
 //--- Wait for serial (blink led at 10 Hz during waiting)
   while (!Serial) {
     delay (50) ;
     digitalWrite (LED_BUILTIN, !digitalRead (LED_BUILTIN)) ;
   }
-//----------------------------------- Begin SPI
-  SPI.begin (MCP2517_SCK, MCP2517_MISO, MCP2517_MOSI) ;
+//--- Define alternate pins for SPI1 (see https://www.pjrc.com/teensy/td_libs_SPI.html)
+  Serial.print ("Using pin #") ;
+  Serial.print (MCP2517_SDI) ;
+  Serial.print (" for MOSI: ") ;
+  Serial.println (SPI1.pinIsMOSI (MCP2517_SDI) ? "yes" : "NO!!!") ;
+  Serial.print ("Using pin #") ;
+  Serial.print (MCP2517_SDO) ;
+  Serial.print (" for MISO: ") ;
+  Serial.println (SPI1.pinIsMISO (MCP2517_SDO) ? "yes" : "NO!!!") ;
+  Serial.print ("Using pin #") ;
+  Serial.print (MCP2517_SCK) ;
+  Serial.print (" for SCK: ") ;
+  Serial.println (SPI1.pinIsSCK (MCP2517_SCK) ? "yes" : "NO!!!") ;
+  SPI1.setMOSI (MCP2517_SDI) ;
+  SPI1.setMISO (MCP2517_SDO) ;
+  SPI1.setSCK (MCP2517_SCK) ;
+//----------------------------------- Begin SPI1
+  SPI1.begin () ;
 //--- Configure ACAN2517
   Serial.print ("sizeof (ACAN2517Settings): ") ;
   Serial.print (sizeof (ACAN2517Settings)) ;
@@ -65,7 +67,7 @@ void setup () {
   Serial.println ("Configure ACAN2517") ;
   ACAN2517Settings settings (ACAN2517Settings::OSC_4MHz10xPLL, 125 * 1000) ; // CAN bit rate 125 kb/s
   settings.mRequestedMode = ACAN2517Settings::InternalLoopBack ; // Select loopback mode
-  const uint32_t errorCode = can.begin (settings, [] { can.isr () ; }) ;
+  const uint32_t errorCode = can.begin (settings, NULL) ; // No ISR
   if (errorCode == 0) {
     Serial.print ("Bit Rate prescaler: ") ;
     Serial.println (settings.mBitRatePrescaler) ;
@@ -89,9 +91,7 @@ void setup () {
   }
 }
 
-//——————————————————————————————————————————————————————————————————————————————
-//   LOOP
-//——————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 static unsigned gBlinkLedDate = 0 ;
 static unsigned gReceivedFrameCount = 0 ;
@@ -100,6 +100,7 @@ static unsigned gSentFrameCount = 0 ;
 //——————————————————————————————————————————————————————————————————————————————
 
 void loop () {
+  can.poll () ; // Call can.poll as often as possible
   CANMessage frame ;
   if (gBlinkLedDate < millis ()) {
     gBlinkLedDate += 2000 ;

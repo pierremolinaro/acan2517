@@ -1,5 +1,5 @@
 //——————————————————————————————————————————————————————————————————————————————
-//  ACAN2517 Demo in loopback mode, for ESP32
+//  ACAN2517 Demo in loopback mode, for ESP32, with no interrupt pin
 //——————————————————————————————————————————————————————————————————————————————
 
 #ifndef ARDUINO_ARCH_ESP32
@@ -33,13 +33,12 @@ static const byte MCP2517_MOSI = 19 ; // SDI input of MCP2517
 static const byte MCP2517_MISO = 18 ; // SDO output of MCP2517 
 
 static const byte MCP2517_CS  = 16 ; // CS input of MCP2517 
-static const byte MCP2517_INT = 32 ; // INT output of MCP2517
 
 //——————————————————————————————————————————————————————————————————————————————
 //  ACAN2517 Driver object
 //——————————————————————————————————————————————————————————————————————————————
 
-ACAN2517 can (MCP2517_CS, SPI, MCP2517_INT) ;
+ACAN2517 can (MCP2517_CS, SPI, 255) ; // Last argument is 255 -> no interrupt pin
 
 //——————————————————————————————————————————————————————————————————————————————
 //   SETUP
@@ -65,7 +64,7 @@ void setup () {
   Serial.println ("Configure ACAN2517") ;
   ACAN2517Settings settings (ACAN2517Settings::OSC_4MHz10xPLL, 125 * 1000) ; // CAN bit rate 125 kb/s
   settings.mRequestedMode = ACAN2517Settings::InternalLoopBack ; // Select loopback mode
-  const uint32_t errorCode = can.begin (settings, [] { can.isr () ; }) ;
+  const uint32_t errorCode = can.begin (settings, NULL) ; // Second argument is NULL, no interrupt service routine
   if (errorCode == 0) {
     Serial.print ("Bit Rate prescaler: ") ;
     Serial.println (settings.mBitRatePrescaler) ;
@@ -100,6 +99,7 @@ static unsigned gSentFrameCount = 0 ;
 //——————————————————————————————————————————————————————————————————————————————
 
 void loop () {
+  can.poll () ; // Call it as often as possible
   CANMessage frame ;
   if (gBlinkLedDate < millis ()) {
     gBlinkLedDate += 2000 ;
