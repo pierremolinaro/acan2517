@@ -74,10 +74,16 @@ class ACAN2517Settings {
   public: bool mBitRateClosedToDesiredRate = false ; // The above configuration is not correct
 
 //······················································································································
-//    TXCAN pin is Open Drain ?
+//    MCP2517FD TXCAN pin is Open Drain ?
 //······················································································································
 
   public: bool mTXCANIsOpenDrain = false ; // false --> Push/Pull Output, true --> Open Drain Output
+
+//······················································································································
+//    MCP2517FD INT pin is Open Drain ?
+//······················································································································
+
+  public: bool mINTIsOpenDrain = false ; // false --> Push/Pull Output, true --> Open Drain Output
 
 //······················································································································
 //    CLKO pin function (default value is MCP2517FD power on setting)

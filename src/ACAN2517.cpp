@@ -21,14 +21,8 @@
 //   - interrupt service routine performs a xSemaphoreGive on mISRSemaphore of can driver
 //   - this activates the myESP32Task task that performs "isr_core" that is done by interrupt service routine
 //     in "usual" Arduino;
-//   - as this task runs in parallel with setup / loop routines, SPI access is protected by a mutual access exclusion
-//     semaphore named gMutualExclusion.
-
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-
-#ifdef ARDUINO_ARCH_ESP32
-  static SemaphoreHandle_t gMutualExclusion = xSemaphoreCreateCounting (1, 1) ;
-#endif
+//   - as this task runs in parallel with setup / loop routines, SPI access is natively protected by the
+//     beginTransaction / endTransaction pair, that manages a mutex.
 
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
@@ -39,9 +33,7 @@
       xSemaphoreTake (canDriver->mISRSemaphore, portMAX_DELAY) ;
       bool loop = true ;
       while (loop) {
-        xSemaphoreTake (gMutualExclusion, portMAX_DELAY) ;
-          loop = canDriver->isr_core () ;
-        xSemaphoreGive (gMutualExclusion) ;
+        loop = canDriver->isr_core () ;
 	    }
     }
   }
@@ -327,6 +319,9 @@ uint32_t ACAN2517::begin (const ACAN2517Settings & inSettings,
     if (inSettings.mTXCANIsOpenDrain) {
       d |= 1 << 4 ; // TXCANOD
     }
+    if (inSettings.mINTIsOpenDrain) {
+      d |= 1 << 6 ; // INTOD
+    }
     writeByteRegister (IOCON_REGISTER + 3, d); // DS20005688B, page 18
   //----------------------------------- Configure TXQ
     d = inSettings.mControllerTXQBufferRetransmissionAttempts ;
@@ -428,11 +423,8 @@ uint32_t ACAN2517::begin (const ACAN2517Settings & inSettings,
 
 bool ACAN2517::tryToSend (const CANMessage & inMessage) {
 //--- Workaround: the Teensy 3.5 / 3.6 "SPI.usingInterrupt" bug (https://github.com/PaulStoffregen/SPI/issues/35)
-//    Arduino ESP32 does not implement "SPI.usingInterrupt", so we mask interrupts
   #if (defined (__MK64FX512__) || defined (__MK66FX1M0__))
     noInterrupts () ;
-  #elif defined (ARDUINO_ARCH_ESP32)
-    xSemaphoreTake (gMutualExclusion, portMAX_DELAY) ;
   #endif
     mSPI.beginTransaction (mSPISettings) ;
       bool result = false ;
@@ -444,8 +436,6 @@ bool ACAN2517::tryToSend (const CANMessage & inMessage) {
     mSPI.endTransaction () ;
   #if (defined (__MK64FX512__) || defined (__MK66FX1M0__))
     interrupts () ;
-  #elif defined (ARDUINO_ARCH_ESP32)
-    xSemaphoreGive (gMutualExclusion) ;
   #endif
   return result ;
 }
@@ -542,13 +532,13 @@ bool ACAN2517::sendViaTXQ (const CANMessage & inMessage) {
 
 bool ACAN2517::available (void) {
   #ifdef ARDUINO_ARCH_ESP32
-    xSemaphoreTake (gMutualExclusion, portMAX_DELAY) ;
+    mSPI.beginTransaction (mSPISettings) ; // For ensuring mutual exclusion access
   #else
     noInterrupts () ;
   #endif
     const bool hasReceivedMessage = mDriverReceiveBuffer.count () > 0 ;
   #ifdef ARDUINO_ARCH_ESP32
-    xSemaphoreGive (gMutualExclusion) ;
+    mSPI.endTransaction () ;
   #else
     interrupts () ;
   #endif
@@ -559,7 +549,7 @@ bool ACAN2517::available (void) {
 
 bool ACAN2517::receive (CANMessage & outMessage) {
   #ifdef ARDUINO_ARCH_ESP32
-    xSemaphoreTake (gMutualExclusion, portMAX_DELAY) ;
+    mSPI.beginTransaction (mSPISettings) ; // For ensuring mutual exclusion access
   #else
     noInterrupts () ;
   #endif
@@ -568,7 +558,7 @@ bool ACAN2517::receive (CANMessage & outMessage) {
       writeByteRegisterSPI (C1FIFOCON_REGISTER (receiveFIFOIndex), 1) ;
     }
   #ifdef ARDUINO_ARCH_ESP32
-    xSemaphoreGive (gMutualExclusion) ;
+    mSPI.endTransaction () ;
   #else
     interrupts () ;
   #endif
@@ -614,7 +604,7 @@ bool ACAN2517::dispatchReceivedMessage (const tFilterMatchCallBack inFilterMatch
 #ifndef ARDUINO_ARCH_ESP32
   void ACAN2517::poll (void) {
     noInterrupts () ;
-      isr_core () ;
+      while (isr_core ()) {}
     interrupts () ;
   }
 #endif
