@@ -1,39 +1,15 @@
 //——————————————————————————————————————————————————————————————————————————————
-//  ACAN2517 Demo in loopback mode, for ESP32
-//——————————————————————————————————————————————————————————————————————————————
-
-#ifndef ARDUINO_ARCH_ESP32
-  #error "Select an ESP32 board"
-#endif
-
+//  ACAN2517 Demo in loopback mode, for Arduino Uno
 //——————————————————————————————————————————————————————————————————————————————
 
 #include <ACAN2517.h>
 #include <SPI.h>
 
 //——————————————————————————————————————————————————————————————————————————————
-//  For using SPI on ESP32, see demo sketch SPI_Multiple_Buses
-//  Two SPI busses are available in Arduino, HSPI and VSPI.
-//  By default, Arduino SPI use VSPI, leaving HSPI unused.
-//  Default VSPI pins are: SCK=18, MISO=19, MOSI=23.
-//  You can change the default pin with additional begin arguments
-//    SPI.begin (MCP2517_SCK, MCP2517_MISO, MCP2517_MOSI)
-//  CS input of MCP2517 should be connected to a digital output port
-//  INT output of MCP2517 should be connected to a digital input port, with interrupt capability
-//  Notes:
-//    - GPIOs 34 to 39 are GPIs – input only pins. These pins don’t have internal pull-ups or
-//      pull-down resistors. They can’t be used as outputs.
-//    - some pins do not support INPUT_PULLUP (see https://www.esp32.com/viewtopic.php?t=439)
-//    - All GPIOs can be configured as interrupts
-// See https://randomnerdtutorials.com/esp32-pinout-reference-gpios/
-//——————————————————————————————————————————————————————————————————————————————
+// Very very important: put a 10kΩ resistor between CS and VDD of MCP2517FD
 
-static const byte MCP2517_SCK  = 26 ; // SCK input of MCP2517
-static const byte MCP2517_MOSI = 19 ; // SDI input of MCP2517
-static const byte MCP2517_MISO = 18 ; // SDO output of MCP2517
-
-static const byte MCP2517_CS  = 16 ; // CS input of MCP2517
-static const byte MCP2517_INT = 32 ; // INT output of MCP2517
+static const byte MCP2517_CS  = 10 ; // CS input of MCP2517 
+static const byte MCP2517_INT =  3 ; // INT output of MCP2517
 
 //——————————————————————————————————————————————————————————————————————————————
 //  ACAN2517 Driver object
@@ -46,25 +22,29 @@ ACAN2517 can (MCP2517_CS, SPI, MCP2517_INT) ;
 //——————————————————————————————————————————————————————————————————————————————
 
 void setup () {
-//--- Switch on builtin led
-  pinMode (LED_BUILTIN, OUTPUT) ;
-  digitalWrite (LED_BUILTIN, HIGH) ;
 //--- Start serial
   Serial.begin (115200) ;
 //--- Wait for serial (blink led at 10 Hz during waiting)
   while (!Serial) {
     delay (50) ;
-    digitalWrite (LED_BUILTIN, !digitalRead (LED_BUILTIN)) ;
   }
 //----------------------------------- Begin SPI
-  SPI.begin (MCP2517_SCK, MCP2517_MISO, MCP2517_MOSI) ;
+  SPI.begin () ;
 //--- Configure ACAN2517
   Serial.print ("sizeof (ACAN2517Settings): ") ;
   Serial.print (sizeof (ACAN2517Settings)) ;
   Serial.println (" bytes") ;
   Serial.println ("Configure ACAN2517") ;
-  ACAN2517Settings settings (ACAN2517Settings::OSC_4MHz10xPLL, 125 * 1000) ; // CAN bit rate 125 kb/s
+  ACAN2517Settings settings (ACAN2517Settings::OSC_40MHz, 125UL * 1000UL) ;
   settings.mRequestedMode = ACAN2517Settings::InternalLoopBack ; // Select loopback mode
+//--- Default values are too high for an Arduino Uno that contains 2048 bytes of RAM: reduce them
+  settings.mDriverTransmitFIFOSize = 1 ;
+  settings.mDriverReceiveFIFOSize = 1 ;
+//--- RAM Usage
+  Serial.print ("MCP2517FD RAM Usage: ") ;
+  Serial.print (settings.ramUsage ()) ;
+  Serial.println (" bytes") ;
+//--- Begin
   const uint32_t errorCode = can.begin (settings, [] { can.isr () ; }) ;
   if (errorCode == 0) {
     Serial.print ("Bit Rate prescaler: ") ;
@@ -93,7 +73,7 @@ void setup () {
 //   LOOP
 //——————————————————————————————————————————————————————————————————————————————
 
-static uint32_t gBlinkLedDate = 0 ;
+static uint32_t gSendDate = 0 ;
 static uint32_t gReceivedFrameCount = 0 ;
 static uint32_t gSentFrameCount = 0 ;
 
@@ -101,9 +81,8 @@ static uint32_t gSentFrameCount = 0 ;
 
 void loop () {
   CANMessage frame ;
-  if (gBlinkLedDate < millis ()) {
-    gBlinkLedDate += 2000 ;
-    digitalWrite (LED_BUILTIN, !digitalRead (LED_BUILTIN)) ;
+  if (gSendDate < millis ()) {
+    gSendDate += 2000 ;
     const bool ok = can.tryToSend (frame) ;
     if (ok) {
       gSentFrameCount += 1 ;

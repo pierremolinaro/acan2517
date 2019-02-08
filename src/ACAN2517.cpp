@@ -222,14 +222,14 @@ uint32_t ACAN2517::begin (const ACAN2517Settings & inSettings,
     pinMode (mCS, OUTPUT) ;
     deassertCS () ;
   //----------------------------------- Set SPI clock to 1 MHz
-    mSPISettings = SPISettings (1 * 1000 * 1000, MSBFIRST, SPI_MODE0) ;
+    mSPISettings = SPISettings (1UL * 1000 * 1000, MSBFIRST, SPI_MODE0) ;
   //----------------------------------- Request configuration
     writeByteRegister (C1CON_REGISTER + 3, 0x04 | (1 << 3)) ; // Request configuration mode, abort all transmissions
   //----------------------------------- Wait (2 ms max) until requested mode is reached
     bool wait = true ;
     const uint32_t deadline = millis () + 2 ;
     while (wait) {
-      const uint32_t actualMode = (readByteRegister (C1CON_REGISTER + 2) >> 5) & 0x07 ;
+      const uint8_t actualMode = (readByteRegister (C1CON_REGISTER + 2) >> 5) & 0x07 ;
       wait = actualMode != 0x04 ;
       if (wait && (millis () >= deadline)) {
         errorCode |= kRequestedConfigurationModeTimeOut ;

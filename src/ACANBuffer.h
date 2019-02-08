@@ -113,8 +113,8 @@ class ACANBuffer {
 // No copy
 //······················································································································
 
-  private: ACANBuffer (const ACANBuffer &) ;
-  private: ACANBuffer & operator = (const ACANBuffer &) ;
+  private: ACANBuffer (const ACANBuffer &) = delete ;
+  private: ACANBuffer & operator = (const ACANBuffer &) = delete ;
 } ;
 
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

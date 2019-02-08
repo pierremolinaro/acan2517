@@ -12,21 +12,21 @@
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 uint32_t ACAN2517Settings::sysClock (const Oscillator inOscillator) {
-  uint32_t sysClock = 40 * 1000 * 1000 ;
+  uint32_t sysClock = 40UL * 1000 * 1000 ;
   switch (inOscillator) {
   case OSC_4MHz:
-    sysClock =  4 * 1000 * 1000 ;
+    sysClock =  4UL * 1000 * 1000 ;
     break ;
   case OSC_4MHz_DIVIDED_BY_2:
-    sysClock =  2 * 1000 * 1000 ;
+    sysClock =  2UL * 1000 * 1000 ;
     break ;
   case OSC_4MHz10xPLL_DIVIDED_BY_2 :
   case OSC_40MHz_DIVIDED_BY_2:
   case OSC_20MHz:
-    sysClock = 20 * 1000 * 1000 ;
+    sysClock = 20UL * 1000 * 1000 ;
     break ;
   case OSC_20MHz_DIVIDED_BY_2:
-    sysClock = 10 * 1000 * 1000 ;
+    sysClock = 10UL * 1000 * 1000 ;
     break ;
   case OSC_4MHz10xPLL:
   case OSC_40MHz:
