@@ -118,10 +118,10 @@ class ACAN2517 {
 //    Private methods
 //······················································································································
 
-  private: void readCommandSPI (const uint16_t inRegisterAddress) ;
-  private: void writeCommandSPI (const uint16_t inRegisterAddress) ;
-  private: uint32_t readWordSPI (void) ;
-  private: void writeWordSPI (const uint32_t inValue) ;
+  // private: void readCommandSPI (const uint16_t inRegisterAddress) ;
+  // private: void writeCommandSPI (const uint16_t inRegisterAddress) ;
+  // private: uint32_t readWordSPI (void) ;
+  // private: void writeWordSPI (const uint32_t inValue) ;
 
   private: void writeRegisterSPI (const uint16_t inRegisterAddress, const uint32_t inValue) ;
   private: uint32_t readRegisterSPI (const uint16_t inRegisterAddress) ;

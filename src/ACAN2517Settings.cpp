@@ -55,7 +55,7 @@ mOscillator (inOscillator) {
   while ((TQCount <= (MAX_PHASE_SEGMENT_1 + MAX_PHASE_SEGMENT_2 + 1)) && (BRP > 0)) {
   //--- Compute error using TQCount
     if ((TQCount >= 4) && (TQCount <= maxTQCount)) {
-      const uint32_t error = mSysClock - inDesiredBitRate * TQCount * BRP ; // error is allways >= 0
+      const uint32_t error = mSysClock - inDesiredBitRate * TQCount * BRP ; // error is always >= 0
       if (error <= smallestError) {
         smallestError = error ;
         bestBRP = BRP ;
@@ -64,7 +64,7 @@ mOscillator (inOscillator) {
     }
   //--- Compute error using TQCount+1
     if ((TQCount >= 3) && (TQCount < maxTQCount)) {
-      const uint32_t error = inDesiredBitRate * (TQCount + 1) * BRP - mSysClock ; // error is allways >= 0
+      const uint32_t error = inDesiredBitRate * (TQCount + 1) * BRP - mSysClock ; // error is always >= 0
       if (error <= smallestError) {
         smallestError = error ;
         bestBRP = BRP ;
@@ -92,7 +92,7 @@ mOscillator (inOscillator) {
   mBitRatePrescaler = (uint16_t) bestBRP ;
   mPhaseSegment1 = (uint16_t) PS1 ;
   mPhaseSegment2 = (uint8_t) PS2 ;
-  mSJW = mPhaseSegment2 ; // Allways 1 <= SJW <= 128, and SJW <= mPhaseSegment2
+  mSJW = mPhaseSegment2 ; // Always 1 <= SJW <= 128, and SJW <= mPhaseSegment2
 //--- Final check of the configuration
   const uint32_t W = bestTQCount * mDesiredBitRate * bestBRP ;
   const uint64_t diff = (mSysClock > W) ? (mSysClock - W) : (W - mSysClock) ;
