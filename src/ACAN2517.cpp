@@ -714,11 +714,10 @@ void ACAN2517::transmitInterrupt (void) {
 
 void ACAN2517::receiveInterrupt (void) {
   readByteRegisterSPI (C1FIFOSTA_REGISTER (receiveFIFOIndex)) ;
-//--- Use a buffer for getting data
+//--- Use a 18-byte buffer for getting data (speed enhancement, thanks to thomasfla)
   uint8_t buff [18] = {0} ;
 //--- Enter command
   const uint16_t ramAddress = (uint16_t) (0x400 + readRegisterSPI (C1FIFOUA_REGISTER (receiveFIFOIndex))) ;
-//--- Enter command
   const uint16_t readCommand = (ramAddress & 0x0FFF) | (0b0011 << 12) ;
   buff[0] = readCommand >> 8 ;
   buff[1] = readCommand & 0xFF ;
