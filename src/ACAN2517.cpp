@@ -1,30 +1,44 @@
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 // A CAN driver for MCP2517FD, CAN 2.0B mode
 // by Pierre Molinaro
 // https://github.com/pierremolinaro/acan2517
 //
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 #include <ACAN2517.h>
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 // Note about ESP32
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-
+//----------------------------------------------------------------------------------------------------------------------
+//
 // It appears that Arduino ESP32 interrupts are managed in a completely different way from "usual" Arduino:
 //   - SPI.usingInterrupt is not implemented;
-//   - noInterrupts() and interrupts() are NOPs;
+//   - noInterrupts() and interrupts() are NOPs: use taskDISABLE_INTERRUPTS and taskENABLE_INTERRUPTS;
 //   - interrupt service routines should be fast, otherwise you get an "Guru Meditation Error: Core 1 panic'ed
 //     (Interrupt wdt timeout on CPU1)".
-
+//
 // So we handle the ESP32 interrupt in the following way:
-//   - interrupt service routine performs a xSemaphoreGive on mISRSemaphore of can driver
+//   - interrupt service routine performs a xSemaphoreGiveFromISR on mISRSemaphore of can driver
 //   - this activates the myESP32Task task that performs "isr_core" that is done by interrupt service routine
 //     in "usual" Arduino;
 //   - as this task runs in parallel with setup / loop routines, SPI access is natively protected by the
-//     beginTransaction / endTransaction pair, that manages a mutex.
-
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//     beginTransaction / endTransaction pair, that manages a mutex;
+//   - (May 29, 2019) it appears that MCP2717FD wants de CS line to deasserted as soon as possible (thanks for
+//     Nick Kirkby for having signaled me this point, see https://github.com/pierremolinaro/acan2517/issues/5);
+//     so we mask interrupts when we access the MCP2517FD, the sequence becomes:
+//           mSPI.beginTransaction (mSPISettings) ;
+//             #ifdef ARDUINO_ARCH_ESP32
+//               taskDISABLE_INTERRUPTS () ;
+//             #endif
+//               assertCS () ;
+//                  ... Access the MCP2517FD ...
+//               deassertCS () ;
+//             #ifdef ARDUINO_ARCH_ESP32
+//               taskENABLE_INTERRUPTS () ;
+//             #endif
+//           mSPI.endTransaction () ;
+//
+//----------------------------------------------------------------------------------------------------------------------
 
 #ifdef ARDUINO_ARCH_ESP32
   static void myESP32Task (void * pData) {
@@ -39,9 +53,9 @@
   }
 #endif
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 // ACAN2517 register addresses
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 static const uint16_t C1CON_REGISTER      = 0x000 ;
 static const uint16_t C1NBTCFG_REGISTER   = 0x004 ;
@@ -117,9 +131,9 @@ static const uint16_t OSC_REGISTER   = 0xE00 ;
 
 static const uint16_t IOCON_REGISTER = 0xE04 ;
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 //    BYTE BUFFER UTILITY FUNCTIONS
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 static void enterWordInBufferAtIndex (const uint32_t inValue, uint8_t ioBuffer [], const uint8_t inIndex) {
   ioBuffer [inIndex + 0] = (uint8_t) inValue ;
@@ -138,13 +152,13 @@ static uint32_t wordFromBufferAtIndex (uint8_t ioBuffer [], const uint8_t inInde
   return result ;
 }
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 //    RECEIVE FIFO INDEX
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 static const uint8_t receiveFIFOIndex = 1 ;
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 ACAN2517::ACAN2517 (const uint8_t inCS, // CS input of MCP2517FD
                     SPIClass & inSPI, // Hardware SPI object
@@ -163,7 +177,7 @@ mDriverTransmitBuffer ()
 {
 }
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 uint32_t ACAN2517::begin (const ACAN2517Settings & inSettings,
                           void (* inInterruptServiceRoutine) (void)) {
@@ -174,7 +188,7 @@ uint32_t ACAN2517::begin (const ACAN2517Settings & inSettings,
   return begin (inSettings, inInterruptServiceRoutine, filters) ;
 }
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 uint32_t ACAN2517::begin (const ACAN2517Settings & inSettings,
                           void (* inInterruptServiceRoutine) (void),
@@ -438,9 +452,9 @@ uint32_t ACAN2517::begin (const ACAN2517Settings & inSettings,
   return errorCode ;
 }
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 //    SEND FRAME
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 bool ACAN2517::tryToSend (const CANMessage & inMessage) {
 //--- Workaround: the Teensy 3.5 / 3.6 "SPI.usingInterrupt" bug (https://github.com/PaulStoffregen/SPI/issues/35)
@@ -448,12 +462,18 @@ bool ACAN2517::tryToSend (const CANMessage & inMessage) {
     noInterrupts () ;
   #endif
     mSPI.beginTransaction (mSPISettings) ;
-      bool result = false ;
-      if (inMessage.idx == 0) {
-        result = enterInTransmitBuffer (inMessage) ;
-      }else if (inMessage.idx == 255) {
-        result = sendViaTXQ (inMessage) ;
-      }
+      #ifdef ARDUINO_ARCH_ESP32
+        taskDISABLE_INTERRUPTS () ;
+      #endif
+        bool result = false ;
+        if (inMessage.idx == 0) {
+          result = enterInTransmitBuffer (inMessage) ;
+        }else if (inMessage.idx == 255) {
+          result = sendViaTXQ (inMessage) ;
+        }
+      #ifdef ARDUINO_ARCH_ESP32
+        taskENABLE_INTERRUPTS () ;
+      #endif
     mSPI.endTransaction () ;
   #if (defined (__MK64FX512__) || defined (__MK66FX1M0__))
     interrupts () ;
@@ -461,7 +481,7 @@ bool ACAN2517::tryToSend (const CANMessage & inMessage) {
   return result ;
 }
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 bool ACAN2517::enterInTransmitBuffer (const CANMessage & inMessage) {
   bool result ;
@@ -482,7 +502,7 @@ bool ACAN2517::enterInTransmitBuffer (const CANMessage & inMessage) {
   return result ;
 }
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 void ACAN2517::appendInControllerTxFIFO (const CANMessage & inMessage) {
 //--- Enter data to send to SPI into a 18-byte buffer (speed enhancement, thanks to thomasfla)
@@ -520,7 +540,7 @@ void ACAN2517::appendInControllerTxFIFO (const CANMessage & inMessage) {
   writeByteRegisterSPI (C1FIFOCON_REGISTER (2) + 1, d);
 }
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 bool ACAN2517::sendViaTXQ (const CANMessage & inMessage) {
 //--- Enter message only if TXQ FIFO is not full (see DS20005688B, page 50)
@@ -563,9 +583,9 @@ bool ACAN2517::sendViaTXQ (const CANMessage & inMessage) {
   return TXQNotFull ;
 }
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 //    RECEIVE FRAME
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 bool ACAN2517::available (void) {
   #ifdef ARDUINO_ARCH_ESP32
@@ -582,11 +602,12 @@ bool ACAN2517::available (void) {
   return hasReceivedMessage ;
 }
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 bool ACAN2517::receive (CANMessage & outMessage) {
   #ifdef ARDUINO_ARCH_ESP32
     mSPI.beginTransaction (mSPISettings) ; // For ensuring mutual exclusion access
+    taskDISABLE_INTERRUPTS () ;
   #else
     noInterrupts () ;
   #endif
@@ -595,6 +616,7 @@ bool ACAN2517::receive (CANMessage & outMessage) {
       writeByteRegisterSPI (C1FIFOCON_REGISTER (receiveFIFOIndex), 1) ;
     }
   #ifdef ARDUINO_ARCH_ESP32
+    taskENABLE_INTERRUPTS () ;
     mSPI.endTransaction () ;
   #else
     interrupts () ;
@@ -603,7 +625,7 @@ bool ACAN2517::receive (CANMessage & outMessage) {
   return hasReceivedMessage ;
 }
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 bool ACAN2517::dispatchReceivedMessage (const tFilterMatchCallBack inFilterMatchCallBack) {
   CANMessage receivedMessage ;
@@ -624,9 +646,9 @@ bool ACAN2517::dispatchReceivedMessage (const tFilterMatchCallBack inFilterMatch
   return hasReceived ;
 }
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 //    POLLING (ESP32)
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 #ifdef ARDUINO_ARCH_ESP32
   void ACAN2517::poll (void) {
@@ -634,9 +656,9 @@ bool ACAN2517::dispatchReceivedMessage (const tFilterMatchCallBack inFilterMatch
   }
 #endif
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 //    POLLING (other than ESP32)
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 #ifndef ARDUINO_ARCH_ESP32
   void ACAN2517::poll (void) {
@@ -646,20 +668,22 @@ bool ACAN2517::dispatchReceivedMessage (const tFilterMatchCallBack inFilterMatch
   }
 #endif
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 //   INTERRUPT SERVICE ROUTINE (ESP32)
 // https://stackoverflow.com/questions/51750377/how-to-disable-interrupt-watchdog-in-esp32-or-increase-isr-time-limit
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 #ifdef ARDUINO_ARCH_ESP32
   void ACAN2517::isr (void) {
-    xSemaphoreGive (mISRSemaphore) ;
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE ;
+    xSemaphoreGiveFromISR (mISRSemaphore, &xHigherPriorityTaskWoken) ;
+    portYIELD_FROM_ISR () ;
   }
 #endif
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 //   INTERRUPT SERVICE ROUTINE (other than ESP32)
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 #ifndef ARDUINO_ARCH_ESP32
   void ACAN2517::isr (void) {
@@ -667,36 +691,42 @@ bool ACAN2517::dispatchReceivedMessage (const tFilterMatchCallBack inFilterMatch
   }
 #endif
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 //   INTERRUPT SERVICE ROUTINES (common)
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 bool ACAN2517::isr_core (void) {
   bool handled = false ;
   mSPI.beginTransaction (mSPISettings) ;
-  const uint32_t intReg = readRegisterSPI (C1INT_REGISTER) ; // DS20005688B, page 34
-  if ((intReg & (1 << 1)) != 0) { // Receive FIFO interrupt
-    receiveInterrupt () ;
-    handled = true ;
-  }
-  if ((intReg & (1 << 0)) != 0) { // Transmit FIFO interrupt
-    transmitInterrupt () ;
-    handled = true ;
-  }
-  if ((intReg & (1 << 2)) != 0) { // TBCIF interrupt
-    writeByteRegisterSPI (C1INT_REGISTER, 1 << 2) ;
-  }
-  if ((intReg & (1 << 3)) != 0) { // MODIF interrupt
-    writeByteRegisterSPI (C1INT_REGISTER, 1 << 3) ;
-  }
-  if ((intReg & (1 << 12)) != 0) { // SERRIF interrupt
-    writeByteRegisterSPI (C1INT_REGISTER + 1, 1 << 4) ;
-  }
+    #ifdef ARDUINO_ARCH_ESP32
+      taskDISABLE_INTERRUPTS () ;
+    #endif
+      const uint32_t intReg = readRegisterSPI (C1INT_REGISTER) ; // DS20005688B, page 34
+      if ((intReg & (1 << 1)) != 0) { // Receive FIFO interrupt
+        receiveInterrupt () ;
+        handled = true ;
+      }
+      if ((intReg & (1 << 0)) != 0) { // Transmit FIFO interrupt
+        transmitInterrupt () ;
+        handled = true ;
+      }
+      if ((intReg & (1 << 2)) != 0) { // TBCIF interrupt
+        writeByteRegisterSPI (C1INT_REGISTER, 1 << 2) ;
+      }
+      if ((intReg & (1 << 3)) != 0) { // MODIF interrupt
+        writeByteRegisterSPI (C1INT_REGISTER, 1 << 3) ;
+      }
+      if ((intReg & (1 << 12)) != 0) { // SERRIF interrupt
+        writeByteRegisterSPI (C1INT_REGISTER + 1, 1 << 4) ;
+      }
+    #ifdef ARDUINO_ARCH_ESP32
+      taskENABLE_INTERRUPTS () ;
+    #endif
   mSPI.endTransaction () ;
   return handled ;
 }
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 void ACAN2517::transmitInterrupt (void) {
   CANMessage message ;
@@ -710,7 +740,7 @@ void ACAN2517::transmitInterrupt (void) {
   }
 }
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 void ACAN2517::receiveInterrupt (void) {
   readByteRegisterSPI (C1FIFOSTA_REGISTER (receiveFIFOIndex)) ;
@@ -754,23 +784,23 @@ void ACAN2517::receiveInterrupt (void) {
   }
 }
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 //   MCP2517FD REGISTER ACCESS, FIRST LEVEL FUNCTIONS
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 // void ACAN2517::readCommandSPI (const uint16_t inRegisterAddress) {
 //   const uint16_t readCommand = (inRegisterAddress & 0x0FFF) | (0b0011 << 12) ;
 //   mSPI.transfer16 (readCommand) ;
 // }
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 // void ACAN2517::writeCommandSPI (const uint16_t inRegisterAddress) {
 //   const uint16_t writeCommand = (inRegisterAddress & 0x0FFF) | (0b0010 << 12) ;
 //   mSPI.transfer16 (writeCommand) ;
 // }
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 // uint32_t ACAN2517::readWordSPI (void) {
 // //--- Read word register via 4-byte buffer (speed enhancement, thanks to thomasfla)
@@ -784,7 +814,7 @@ void ACAN2517::receiveInterrupt (void) {
 //   return result ;
 // }
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 // void ACAN2517::writeWordSPI (const uint32_t inValue) {
 // //--- Write word register via 4-byte buffer (speed enhancement, thanks to thomasfla)
@@ -796,21 +826,21 @@ void ACAN2517::receiveInterrupt (void) {
 //   mSPI.transfer (buff,4) ;
 // }
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 //   MCP2517FD REGISTER ACCESS, SECOND LEVEL FUNCTIONS
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 void ACAN2517::assertCS (void) {
   digitalWrite (mCS, LOW) ;
 }
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 void ACAN2517::deassertCS (void) {
   digitalWrite (mCS, HIGH) ;
 }
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 void ACAN2517::writeRegisterSPI (const uint16_t inRegisterAddress, const uint32_t inValue) {
 //--- Write word register via 6-byte buffer (speed enhancement, thanks to thomasfla)
@@ -827,7 +857,7 @@ void ACAN2517::writeRegisterSPI (const uint16_t inRegisterAddress, const uint32_
   deassertCS () ;
 }
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 uint32_t ACAN2517::readRegisterSPI (const uint16_t inRegisterAddress) {
 //--- Read word register via 6-byte buffer (speed enhancement, thanks to thomasfla)
@@ -846,7 +876,7 @@ uint32_t ACAN2517::readRegisterSPI (const uint16_t inRegisterAddress) {
   return result ;
 }
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 void ACAN2517::writeByteRegisterSPI (const uint16_t inRegisterAddress, const uint8_t inValue) {
 //--- Write byte register via 3-byte buffer (speed enhancement, thanks to thomasfla)
@@ -860,7 +890,7 @@ void ACAN2517::writeByteRegisterSPI (const uint16_t inRegisterAddress, const uin
   deassertCS () ;
 }
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 uint8_t ACAN2517::readByteRegisterSPI (const uint16_t inRegisterAddress) {
 //--- Read byte register via 3-byte buffer (speed enhancement, thanks to thomasfla)
@@ -874,60 +904,96 @@ uint8_t ACAN2517::readByteRegisterSPI (const uint16_t inRegisterAddress) {
   return buff[2] ;
 }
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 //   MCP2517FD REGISTER ACCESS, THIRD LEVEL FUNCTIONS
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 void ACAN2517::writeByteRegister (const uint16_t inRegisterAddress, const uint8_t inValue) {
   mSPI.beginTransaction (mSPISettings) ;
-    writeByteRegisterSPI (inRegisterAddress, inValue) ;
+    #ifdef ARDUINO_ARCH_ESP32
+      taskDISABLE_INTERRUPTS () ;
+    #endif
+      writeByteRegisterSPI (inRegisterAddress, inValue) ;
+    #ifdef ARDUINO_ARCH_ESP32
+      taskENABLE_INTERRUPTS () ;
+    #endif
   mSPI.endTransaction () ;
 }
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 uint8_t ACAN2517::readByteRegister (const uint16_t inRegisterAddress) {
   mSPI.beginTransaction (mSPISettings) ;
-    const uint8_t result = readByteRegisterSPI (inRegisterAddress) ;
+    #ifdef ARDUINO_ARCH_ESP32
+      taskDISABLE_INTERRUPTS () ;
+    #endif
+      const uint8_t result = readByteRegisterSPI (inRegisterAddress) ;
+    #ifdef ARDUINO_ARCH_ESP32
+      taskENABLE_INTERRUPTS () ;
+    #endif
   mSPI.endTransaction () ;
   return result ;
 }
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 void ACAN2517::writeRegister (const uint16_t inRegisterAddress, const uint32_t inValue) {
   mSPI.beginTransaction (mSPISettings) ;
-    writeRegisterSPI (inRegisterAddress, inValue) ;
+    #ifdef ARDUINO_ARCH_ESP32
+      taskDISABLE_INTERRUPTS () ;
+    #endif
+      writeRegisterSPI (inRegisterAddress, inValue) ;
+    #ifdef ARDUINO_ARCH_ESP32
+      taskENABLE_INTERRUPTS () ;
+    #endif
   mSPI.endTransaction () ;
 }
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 uint32_t ACAN2517::readRegister (const uint16_t inRegisterAddress) {
   mSPI.beginTransaction (mSPISettings) ;
-    const uint32_t result = readRegisterSPI (inRegisterAddress) ;
+    #ifdef ARDUINO_ARCH_ESP32
+      taskDISABLE_INTERRUPTS () ;
+    #endif
+      const uint32_t result = readRegisterSPI (inRegisterAddress) ;
+    #ifdef ARDUINO_ARCH_ESP32
+      taskENABLE_INTERRUPTS () ;
+    #endif
   mSPI.endTransaction () ;
   return result ;
 }
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 uint32_t ACAN2517::readErrorCounters (void) {
   mSPI.beginTransaction (mSPISettings) ;
-    const uint32_t result = readRegisterSPI (C1BDIAG0_REGISTER) ;
+    #ifdef ARDUINO_ARCH_ESP32
+      taskDISABLE_INTERRUPTS () ;
+    #endif
+      const uint32_t result = readRegisterSPI (C1BDIAG0_REGISTER) ;
+    #ifdef ARDUINO_ARCH_ESP32
+      taskENABLE_INTERRUPTS () ;
+    #endif
   mSPI.endTransaction () ;
   return result ;
 }
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
 void ACAN2517::reset2517FD (void) {
   mSPI.beginTransaction (mSPISettings) ; // Check RESET is performed with 1 MHz clock
-    assertCS () ;
-      mSPI.transfer16 (0x00) ; // Reset instruction: 0x0000
-    deassertCS () ;
+    #ifdef ARDUINO_ARCH_ESP32
+      taskDISABLE_INTERRUPTS () ;
+    #endif
+      assertCS () ;
+        mSPI.transfer16 (0x00) ; // Reset instruction: 0x0000
+      deassertCS () ;
+    #ifdef ARDUINO_ARCH_ESP32
+      taskENABLE_INTERRUPTS () ;
+    #endif
   mSPI.endTransaction () ;
 }
 
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//----------------------------------------------------------------------------------------------------------------------
 
