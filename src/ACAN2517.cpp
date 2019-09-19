@@ -153,10 +153,11 @@ static uint32_t wordFromBufferAtIndex (uint8_t ioBuffer [], const uint8_t inInde
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-//    RECEIVE FIFO INDEX
+//    RECEIVE AND TRANSMIT FIFO INDEXES
 //----------------------------------------------------------------------------------------------------------------------
 
-static const uint8_t receiveFIFOIndex = 1 ;
+static const uint8_t RECEIVE_FIFO_INDEX = 1 ;
+static const uint8_t TRANSMIT_FIFO_INDEX = 2 ;
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -168,7 +169,8 @@ mSPI (inSPI),
 mCS (inCS),
 mINT (inINT),
 mUsesTXQ (false),
-mControllerTxFIFOFull (false),
+mHardwareTxFIFOFull (false),
+mRequestedMode (0),
 mDriverReceiveBuffer (),
 mDriverTransmitBuffer ()
 #ifdef ARDUINO_ARCH_ESP32
@@ -259,12 +261,12 @@ uint32_t ACAN2517::begin (const ACAN2517Settings & inSettings,
   //----------------------------------- Set SPI clock to 1 MHz
     mSPISettings = SPISettings (1UL * 1000 * 1000, MSBFIRST, SPI_MODE0) ;
   //----------------------------------- Request configuration
-    writeByteRegister (C1CON_REGISTER + 3, 0x04 | (1 << 3)) ; // Request configuration mode, abort all transmissions
+    writeRegister8 (C1CON_REGISTER + 3, 0x04 | (1 << 3)) ; // Request configuration mode, abort all transmissions
   //----------------------------------- Wait (2 ms max) until requested mode is reached
     bool wait = true ;
     const uint32_t deadline = millis () + 2 ;
     while (wait) {
-      const uint8_t actualMode = (readByteRegister (C1CON_REGISTER + 2) >> 5) & 0x07 ;
+      const uint8_t actualMode = (readRegister8 (C1CON_REGISTER + 2) >> 5) & 0x07 ;
       wait = actualMode != 0x04 ;
       if (wait && (millis () >= deadline)) {
         errorCode |= kRequestedConfigurationModeTimeOut ;
@@ -277,8 +279,8 @@ uint32_t ACAN2517::begin (const ACAN2517Settings & inSettings,
 //----------------------------------- Check SPI connection is on (with a 1 MHz clock)
 // We write and the read back 2517 RAM at address 0x400
   for (uint32_t i=1 ; (i != 0) && (errorCode == 0) ; i <<= 1) {
-    writeRegister (0x400, i) ;
-    const uint32_t readBackValue = readRegister (0x400) ;
+    writeRegister32 (0x400, i) ;
+    const uint32_t readBackValue = readRegister32 (0x400) ;
     if (readBackValue != i) {
       errorCode = kReadBackErrorWith1MHzSPIClock ;
     }
@@ -312,13 +314,13 @@ uint32_t ACAN2517::begin (const ACAN2517Settings & inSettings,
     if (inSettings.mCLKOPin != ACAN2517Settings::SOF) {
       osc |= ((uint8_t) inSettings.mCLKOPin) << 5 ;
     }
-    writeByteRegister (OSC_REGISTER, osc) ; // DS20005688B, page 16
+    writeRegister8 (OSC_REGISTER, osc) ; // DS20005688B, page 16
   //--- Wait for PLL is ready (wait max 2 ms)
     if (pll != 0) {
       bool wait = true ;
       const uint32_t deadline = millis () + 2 ;
       while (wait) {
-        wait = (readByteRegister (OSC_REGISTER + 1) & 0x4) == 0 ;  // DS20005688B, page 16
+        wait = (readRegister8 (OSC_REGISTER + 1) & 0x4) == 0 ;  // DS20005688B, page 16
         if (wait && (millis () >= deadline)) {
           errorCode = kX10PLLNotReadyWithin1MS ;
           wait = false ;
@@ -331,8 +333,8 @@ uint32_t ACAN2517::begin (const ACAN2517Settings & inSettings,
 //----------------------------------- Checking SPI connection is on (with a full speed clock)
 //    We write and the read back 2517 RAM at address 0x400
   for (uint32_t i=1 ; (i != 0) && (errorCode == 0) ; i <<= 1) {
-    writeRegister (0x400, i) ;
-    const uint32_t readBackValue = readRegister (0x400) ;
+    writeRegister32 (0x400, i) ;
+    const uint32_t readBackValue = readRegister32 (0x400) ;
     if (readBackValue != i) {
       errorCode = kReadBackErrorWithFullSpeedSPIClock ;
     }
@@ -344,7 +346,7 @@ uint32_t ACAN2517::begin (const ACAN2517Settings & inSettings,
     mDriverReceiveBuffer.initWithSize (inSettings.mDriverReceiveFIFOSize) ;
   //----------------------------------- Reset RAM
     for (uint16_t address = 0x400 ; address < 0xC00 ; address += 4) {
-      writeRegister (address, 0) ;
+      writeRegister32 (address, 0) ;
     }
   //----------------------------------- Configure CLKO pin
     uint8_t d = 0x03 ; // Respect PM1-PM0 default values
@@ -357,55 +359,55 @@ uint32_t ACAN2517::begin (const ACAN2517Settings & inSettings,
     if (inSettings.mINTIsOpenDrain) {
       d |= 1 << 6 ; // INTOD
     }
-    writeByteRegister (IOCON_REGISTER + 3, d); // DS20005688B, page 18
+    writeRegister8 (IOCON_REGISTER + 3, d); // DS20005688B, page 18
   //----------------------------------- Configure TXQ
     d = inSettings.mControllerTXQBufferRetransmissionAttempts ;
     d <<= 5 ;
     d |= inSettings.mControllerTXQBufferPriority ;
-    writeByteRegister (C1TXQCON_REGISTER + 2, d); // DS20005688B, page 48
+    writeRegister8 (C1TXQCON_REGISTER + 2, d); // DS20005688B, page 48
   // Bit 5-7: Payload Size bits ---> 0: 8 data bytes
   // Bit 4-0: TXQ size ---> 0: Don’t save transmitted messages in TEF
     mUsesTXQ = inSettings.mControllerTXQSize > 0 ;
     d = inSettings.mControllerTXQSize - 1 ;
-    writeByteRegister (C1TXQCON_REGISTER + 3, d); // DS20005688B, page 48
+    writeRegister8 (C1TXQCON_REGISTER + 3, d); // DS20005688B, page 48
   //----------------------------------- Configure TXQ and TEF
   // Bit 4: Enable Transmit Queue bit ---> 1: Enable TXQ and reserves space in RAM
   // Bit 3: Store in Transmit Event FIFO bit ---> 0: Don’t save transmitted messages in TEF
     d = mUsesTXQ ? (1 << 4) : 0x00 ; // Fixed in 1.1.4
-    writeByteRegister (C1CON_REGISTER + 2, d); // DS20005688B, page 24
+    writeRegister8 (C1CON_REGISTER + 2, d); // DS20005688B, page 24
   //----------------------------------- Configure RX FIFO (C1FIFOCON, DS20005688B, page 52)
     d = inSettings.mControllerReceiveFIFOSize - 1 ; // Set receive FIFO size
-    writeByteRegister (C1FIFOCON_REGISTER (1) + 3, d) ;
+    writeRegister8 (C1FIFOCON_REGISTER (1) + 3, d) ;
     d = 1 ; // Interrupt Enabled for FIFO not Empty (TFNRFNIE)
-    writeByteRegister (C1FIFOCON_REGISTER (1), d) ;
+    writeRegister8 (C1FIFOCON_REGISTER (1), d) ;
   //----------------------------------- Configure TX FIFO (C1FIFOCON, DS20005688B, page 52)
     d = inSettings.mControllerTransmitFIFORetransmissionAttempts ;
     d <<= 5 ;
     d |= inSettings.mControllerTransmitFIFOPriority ;
-    writeByteRegister (C1FIFOCON_REGISTER (2) + 2, d) ;
+    writeRegister8 (C1FIFOCON_REGISTER (TRANSMIT_FIFO_INDEX) + 2, d) ;
     d = inSettings.mControllerTransmitFIFOSize - 1 ; // Set transmit FIFO size
-    writeByteRegister (C1FIFOCON_REGISTER (2) + 3, d) ;
+    writeRegister8 (C1FIFOCON_REGISTER (TRANSMIT_FIFO_INDEX) + 3, d) ;
     d = 1 << 7 ; // FIFO 2 is a Tx FIFO
-    writeByteRegister (C1FIFOCON_REGISTER (2), d) ;
+    writeRegister8 (C1FIFOCON_REGISTER (TRANSMIT_FIFO_INDEX), d) ;
   //----------------------------------- Configure receive filters
     uint8_t filterIndex = 0 ;
     ACAN2517Filters::Filter * filter = inFilters.mFirstFilter ;
     mCallBackFunctionArray = new ACANCallBackRoutine [inFilters.filterCount ()] ;
     while (NULL != filter) {
       mCallBackFunctionArray [filterIndex] = filter->mCallBackRoutine ;
-      writeRegister (C1MASK_REGISTER (filterIndex), filter->mFilterMask) ; // DS20005688B, page 61
-      writeRegister (C1FLTOBJ_REGISTER (filterIndex), filter->mAcceptanceFilter) ; // DS20005688B, page 60
+      writeRegister32 (C1MASK_REGISTER (filterIndex), filter->mFilterMask) ; // DS20005688B, page 61
+      writeRegister32 (C1FLTOBJ_REGISTER (filterIndex), filter->mAcceptanceFilter) ; // DS20005688B, page 60
       d = 1 << 7 ; // Filter is enabled
       d |= 1 ; // Message matching filter is stored in FIFO1
-      writeByteRegister (C1FLTCON_REGISTER (filterIndex), d) ; // DS20005688B, page 58
+      writeRegister8 (C1FLTCON_REGISTER (filterIndex), d) ; // DS20005688B, page 58
       filter = filter->mNextFilter ;
       filterIndex += 1 ;
     }
   //----------------------------------- Activate interrupts (C1INT, DS20005688B page 34)
     d  = (1 << 1) ; // Receive FIFO Interrupt Enable
     d |= (1 << 0) ; // Transmit FIFO Interrupt Enable
-    writeByteRegister (C1INT_REGISTER + 2, d) ;
-    writeByteRegister (C1INT_REGISTER + 3, 0) ;
+    writeRegister8 (C1INT_REGISTER + 2, d) ;
+    writeRegister8 (C1INT_REGISTER + 3, 0) ;
   //----------------------------------- Program nominal data rate (C1NBTCFG register)
   //  bits 31-24: BRP - 1
   //  bits 23-16: TSEG1 - 1
@@ -420,16 +422,17 @@ uint32_t ACAN2517::begin (const ACAN2517Settings & inSettings,
     data |= inSettings.mPhaseSegment2 - 1 ;
     data <<= 8 ;
     data |= inSettings.mSJW - 1 ;
-    writeRegister (C1NBTCFG_REGISTER, data);
+    writeRegister32 (C1NBTCFG_REGISTER, data);
   //----------------------------------- Request mode (C1CON_REGISTER + 3)
   //  bits 7-4: Transmit Bandwith Sharing Bits ---> 0
   //  bit 3: Abort All Pending Transmissions bit --> 0
-    writeByteRegister (C1CON_REGISTER + 3, inSettings.mRequestedMode);
+    mRequestedMode = inSettings.mRequestedMode ;
+    writeRegister8 (C1CON_REGISTER + 3, inSettings.mRequestedMode);
   //----------------------------------- Wait (2 ms max) until requested mode is reached
     bool wait = true ;
     const uint32_t deadline = millis () + 2 ;
     while (wait) {
-      const uint8_t actualMode = (readByteRegister (C1CON_REGISTER + 2) >> 5) & 0x07 ;
+      const uint8_t actualMode = (readRegister8 (C1CON_REGISTER + 2) >> 5) & 0x07 ;
       wait = actualMode != inSettings.mRequestedMode ;
       if (wait && (millis () >= deadline)) {
         errorCode |= kRequestedModeTimeOut ;
@@ -457,46 +460,45 @@ uint32_t ACAN2517::begin (const ACAN2517Settings & inSettings,
 //----------------------------------------------------------------------------------------------------------------------
 
 bool ACAN2517::tryToSend (const CANMessage & inMessage) {
-//--- Workaround: the Teensy 3.5 / 3.6 "SPI.usingInterrupt" bug (https://github.com/PaulStoffregen/SPI/issues/35)
-  #if (defined (__MK64FX512__) || defined (__MK66FX1M0__))
-    noInterrupts () ;
-  #endif
-    mSPI.beginTransaction (mSPISettings) ;
-      #ifdef ARDUINO_ARCH_ESP32
-        taskDISABLE_INTERRUPTS () ;
-      #endif
-        bool result = false ;
-        if (inMessage.idx == 0) {
-          result = enterInTransmitBuffer (inMessage) ;
-        }else if (inMessage.idx == 255) {
-          result = sendViaTXQ (inMessage) ;
-        }
-      #ifdef ARDUINO_ARCH_ESP32
-        taskENABLE_INTERRUPTS () ;
-      #endif
-    mSPI.endTransaction () ;
-  #if (defined (__MK64FX512__) || defined (__MK66FX1M0__))
-    interrupts () ;
-  #endif
-  return result ;
+  mSPI.beginTransaction (mSPISettings) ;
+    #ifdef ARDUINO_ARCH_ESP32
+      taskDISABLE_INTERRUPTS () ;
+    #else
+      noInterrupts () ;
+    #endif
+      bool ok ;
+      if (inMessage.idx == 0) {
+        ok = enterInTransmitBuffer (inMessage) ;
+      }else if (inMessage.idx == 255) {
+        ok = sendViaTXQ (inMessage) ;
+      }else{
+        ok = false ;
+      }
+    #ifdef ARDUINO_ARCH_ESP32
+      taskENABLE_INTERRUPTS () ;
+    #else
+      interrupts () ;
+    #endif
+  mSPI.endTransaction () ;
+  return ok ;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 
 bool ACAN2517::enterInTransmitBuffer (const CANMessage & inMessage) {
   bool result ;
-  if (mControllerTxFIFOFull) {
+  if (mHardwareTxFIFOFull) {
     result = mDriverTransmitBuffer.append (inMessage) ;
   }else{
     result = true ;
     appendInControllerTxFIFO (inMessage) ;
   //--- If controller FIFO is full, enable "FIFO not full" interrupt
-    const uint8_t status = readByteRegisterSPI (C1FIFOSTA_REGISTER (2)) ;
+    const uint8_t status = readRegister8Assume_SPI_transaction (C1FIFOSTA_REGISTER (TRANSMIT_FIFO_INDEX)) ;
     if ((status & 1) == 0) { // FIFO is full
       uint8_t d = 1 << 7 ;  // FIFO is a transmit FIFO
       d |= 1 ; // Enable "FIFO not full" interrupt
-      writeByteRegisterSPI (C1FIFOCON_REGISTER (2), d) ;
-      mControllerTxFIFOFull = true ;
+      writeRegister8Assume_SPI_transaction (C1FIFOCON_REGISTER (TRANSMIT_FIFO_INDEX), d) ;
+      mHardwareTxFIFOFull = true ;
     }
   }
   return result ;
@@ -508,7 +510,7 @@ void ACAN2517::appendInControllerTxFIFO (const CANMessage & inMessage) {
 //--- Enter data to send to SPI into a 18-byte buffer (speed enhancement, thanks to thomasfla)
   uint8_t  buff [18] = {0} ;
 //--- Enter command
-  const uint16_t ramAddress = (uint16_t) (0x400 + readRegisterSPI (C1FIFOUA_REGISTER (2))) ;
+  const uint16_t ramAddress = (uint16_t) (0x400 + readRegister32Assume_SPI_transaction (C1FIFOUA_REGISTER (TRANSMIT_FIFO_INDEX))) ;
   const uint16_t writeCommand = (ramAddress & 0x0FFF) | (0b0010 << 12) ;
   buff[0] = writeCommand >> 8 ;
   buff[1] = writeCommand & 0xFF ;
@@ -517,7 +519,7 @@ void ACAN2517::appendInControllerTxFIFO (const CANMessage & inMessage) {
   if (inMessage.ext) {
     idf = ((inMessage.id >> 18) & 0x7FF) | ((inMessage.id & 0x3FFFF) << 11) ;
   }
-  enterWordInBufferAtIndex (idf, buff, 2) ;
+  enterWordInBufferAtIndex (idf, buff, TRANSMIT_FIFO_INDEX) ;
 //--- Write DLC, RTR, IDE bits
   uint32_t parameters = (inMessage.len > 8) ? 8 : inMessage.len ;
   if (inMessage.rtr) {
@@ -537,19 +539,19 @@ void ACAN2517::appendInControllerTxFIFO (const CANMessage & inMessage) {
   deassertCS () ;
 //--- Increment FIFO, send message (see DS20005688B, page 48)
   const uint8_t d = (1 << 0) | (1 << 1) ; // Set UINC bit, TXREQ bit
-  writeByteRegisterSPI (C1FIFOCON_REGISTER (2) + 1, d);
+  writeRegister8Assume_SPI_transaction (C1FIFOCON_REGISTER (TRANSMIT_FIFO_INDEX) + 1, d);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 
 bool ACAN2517::sendViaTXQ (const CANMessage & inMessage) {
 //--- Enter message only if TXQ FIFO is not full (see DS20005688B, page 50)
-  const bool TXQNotFull = mUsesTXQ && (readByteRegisterSPI (C1TXQSTA_REGISTER) & 1) != 0 ;
+  const bool TXQNotFull = mUsesTXQ && (readRegister8Assume_SPI_transaction (C1TXQSTA_REGISTER) & 1) != 0 ;
   if (TXQNotFull) {
   //--- Enter data to send to SPI into a 18-byte buffer (speed enhancement, thanks to thomasfla)
     uint8_t  buff [18] = {0} ;
   //--- Enter command
-    const uint16_t ramAddress = (uint16_t) (0x400 + readRegisterSPI (C1TXQUA_REGISTER)) ;
+    const uint16_t ramAddress = (uint16_t) (0x400 + readRegister32Assume_SPI_transaction (C1TXQUA_REGISTER)) ;
     const uint16_t writeCommand = (ramAddress & 0x0FFF) | (0b0010 << 12) ;
     buff[0] = writeCommand >> 8 ;
     buff[1] = writeCommand & 0xFF ;
@@ -578,7 +580,7 @@ bool ACAN2517::sendViaTXQ (const CANMessage & inMessage) {
     deassertCS () ;
   //--- Increment FIFO, send message (see DS20005688B, page 48)
     const uint8_t d = (1 << 0) | (1 << 1) ; // Set UINC bit, TXREQ bit
-    writeByteRegisterSPI (C1TXQCON_REGISTER + 1, d);
+    writeRegister8Assume_SPI_transaction (C1TXQCON_REGISTER + 1, d);
   }
   return TXQNotFull ;
 }
@@ -613,7 +615,7 @@ bool ACAN2517::receive (CANMessage & outMessage) {
   #endif
     const bool hasReceivedMessage = mDriverReceiveBuffer.remove (outMessage) ;
     if (hasReceivedMessage) { // Receive FIFO is not full, enable "FIFO  not empty" interrupt
-      writeByteRegisterSPI (C1FIFOCON_REGISTER (receiveFIFOIndex), 1) ;
+      writeRegister8Assume_SPI_transaction (C1FIFOCON_REGISTER (RECEIVE_FIFO_INDEX), 1) ;
     }
   #ifdef ARDUINO_ARCH_ESP32
     taskENABLE_INTERRUPTS () ;
@@ -701,7 +703,7 @@ bool ACAN2517::isr_core (void) {
     #ifdef ARDUINO_ARCH_ESP32
       taskDISABLE_INTERRUPTS () ;
     #endif
-      const uint32_t intReg = readRegisterSPI (C1INT_REGISTER) ; // DS20005688B, page 34
+      const uint32_t intReg = readRegister32Assume_SPI_transaction (C1INT_REGISTER) ; // DS20005688B, page 34
       if ((intReg & (1 << 1)) != 0) { // Receive FIFO interrupt
         receiveInterrupt () ;
         handled = true ;
@@ -711,13 +713,20 @@ bool ACAN2517::isr_core (void) {
         handled = true ;
       }
       if ((intReg & (1 << 2)) != 0) { // TBCIF interrupt
-        writeByteRegisterSPI (C1INT_REGISTER, 1 << 2) ;
+        writeRegister8Assume_SPI_transaction (C1INT_REGISTER, 1 << 2) ;
       }
       if ((intReg & (1 << 3)) != 0) { // MODIF interrupt
-        writeByteRegisterSPI (C1INT_REGISTER, 1 << 3) ;
+        writeRegister8Assume_SPI_transaction (C1INT_REGISTER, 1 << 3) ;
       }
       if ((intReg & (1 << 12)) != 0) { // SERRIF interrupt
-        writeByteRegisterSPI (C1INT_REGISTER + 1, 1 << 4) ;
+        writeRegister8Assume_SPI_transaction (C1INT_REGISTER + 1, 1 << 4) ;
+      }
+      if ((intReg & (1 << 11)) != 0) { // RXOVIF interrupt
+        handled = true ;
+        if (mHardwareReceiveBufferOverflowCount < 255) {
+          mHardwareReceiveBufferOverflowCount += 1 ;
+        }
+        writeRegister8Assume_SPI_transaction (C1FIFOSTA_REGISTER (RECEIVE_FIFO_INDEX), ~ (1 << 3)) ;
       }
     #ifdef ARDUINO_ARCH_ESP32
       taskENABLE_INTERRUPTS () ;
@@ -730,24 +739,24 @@ bool ACAN2517::isr_core (void) {
 
 void ACAN2517::transmitInterrupt (void) {
   CANMessage message ;
-  mDriverTransmitBuffer.remove (message) ;
-  appendInControllerTxFIFO (message) ;
-//--- If driver transmit buffer is empty, disable "FIFO not full" interrupt
-  if (mDriverTransmitBuffer.count () == 0) {
-    uint8_t d = 1 << 7 ;  // FIFO is a transmit FIFO
-    writeByteRegisterSPI (C1FIFOCON_REGISTER (2), d) ;
-    mControllerTxFIFOFull = false ;
+  const bool hasMessage = mDriverTransmitBuffer.remove (message) ;
+  if (hasMessage) {
+    appendInControllerTxFIFO (message) ;
+  }else{ // No message in transmit FIFO: disable "FIFO not full" interrupt
+    const uint8_t data8 = 1 << 7 ;  // FIFO is a transmit FIFO
+    writeRegister8Assume_SPI_transaction (C1FIFOCON_REGISTER (TRANSMIT_FIFO_INDEX), data8) ;
+    mHardwareTxFIFOFull = false ;
   }
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 
 void ACAN2517::receiveInterrupt (void) {
-  readByteRegisterSPI (C1FIFOSTA_REGISTER (receiveFIFOIndex)) ;
+  readRegister8Assume_SPI_transaction (C1FIFOSTA_REGISTER (RECEIVE_FIFO_INDEX)) ;
 //--- Use a 18-byte buffer for getting data (speed enhancement, thanks to thomasfla)
   uint8_t buff [18] = {0} ;
 //--- Enter command
-  const uint16_t ramAddress = (uint16_t) (0x400 + readRegisterSPI (C1FIFOUA_REGISTER (receiveFIFOIndex))) ;
+  const uint16_t ramAddress = (uint16_t) (0x400 + readRegister32Assume_SPI_transaction (C1FIFOUA_REGISTER (RECEIVE_FIFO_INDEX))) ;
   const uint16_t readCommand = (ramAddress & 0x0FFF) | (0b0011 << 12) ;
   buff[0] = readCommand >> 8 ;
   buff[1] = readCommand & 0xFF ;
@@ -777,54 +786,12 @@ void ACAN2517::receiveInterrupt (void) {
   mDriverReceiveBuffer.append (message) ;
 //--- Increment FIFO
   const uint8_t d = 1 << 0 ; // Set UINC bit (DS20005688B, page 52)
-  writeByteRegisterSPI (C1FIFOCON_REGISTER (receiveFIFOIndex) + 1, d) ;
+  writeRegister8Assume_SPI_transaction (C1FIFOCON_REGISTER (RECEIVE_FIFO_INDEX) + 1, d) ;
 //--- If driver receive FIFO is full, disable "FIFO not empty" interrupt
   if (mDriverReceiveBuffer.count () == mDriverReceiveBuffer.size ()) {
-    writeByteRegisterSPI (C1FIFOCON_REGISTER (receiveFIFOIndex), 0) ;
+    writeRegister8Assume_SPI_transaction (C1FIFOCON_REGISTER (RECEIVE_FIFO_INDEX), 0) ;
   }
 }
-
-//----------------------------------------------------------------------------------------------------------------------
-//   MCP2517FD REGISTER ACCESS, FIRST LEVEL FUNCTIONS
-//----------------------------------------------------------------------------------------------------------------------
-
-// void ACAN2517::readCommandSPI (const uint16_t inRegisterAddress) {
-//   const uint16_t readCommand = (inRegisterAddress & 0x0FFF) | (0b0011 << 12) ;
-//   mSPI.transfer16 (readCommand) ;
-// }
-
-//----------------------------------------------------------------------------------------------------------------------
-
-// void ACAN2517::writeCommandSPI (const uint16_t inRegisterAddress) {
-//   const uint16_t writeCommand = (inRegisterAddress & 0x0FFF) | (0b0010 << 12) ;
-//   mSPI.transfer16 (writeCommand) ;
-// }
-
-//----------------------------------------------------------------------------------------------------------------------
-
-// uint32_t ACAN2517::readWordSPI (void) {
-// //--- Read word register via 4-byte buffer (speed enhancement, thanks to thomasfla)
-//   uint32_t result = 0 ;
-//   uint8_t buff[4] = {0} ;
-//   mSPI.transfer (buff, 4) ;
-//   result |= ((uint32_t) buff[0]) <<  0 ;
-//   result |= ((uint32_t) buff[1]) <<  8 ;
-//   result |= ((uint32_t) buff[2]) << 16 ;
-//   result |= ((uint32_t) buff[3]) << 24 ;
-//   return result ;
-// }
-
-//----------------------------------------------------------------------------------------------------------------------
-
-// void ACAN2517::writeWordSPI (const uint32_t inValue) {
-// //--- Write word register via 4-byte buffer (speed enhancement, thanks to thomasfla)
-//   uint8_t buff[4] = {0} ;
-//   buff[0] = (uint8_t) inValue ;
-//   buff[1] = (uint8_t) (inValue >>  8) ;
-//   buff[2] = (uint8_t) (inValue >> 16) ;
-//   buff[3] = (uint8_t) (inValue >> 24) ;
-//   mSPI.transfer (buff,4) ;
-// }
 
 //----------------------------------------------------------------------------------------------------------------------
 //   MCP2517FD REGISTER ACCESS, SECOND LEVEL FUNCTIONS
@@ -842,7 +809,7 @@ void ACAN2517::deassertCS (void) {
 
 //----------------------------------------------------------------------------------------------------------------------
 
-void ACAN2517::writeRegisterSPI (const uint16_t inRegisterAddress, const uint32_t inValue) {
+void ACAN2517::writeRegister32Assume_SPI_transaction (const uint16_t inRegisterAddress, const uint32_t inValue) {
 //--- Write word register via 6-byte buffer (speed enhancement, thanks to thomasfla)
   uint8_t buff[6] = {0} ;
 //--- Enter command
@@ -859,7 +826,7 @@ void ACAN2517::writeRegisterSPI (const uint16_t inRegisterAddress, const uint32_
 
 //----------------------------------------------------------------------------------------------------------------------
 
-uint32_t ACAN2517::readRegisterSPI (const uint16_t inRegisterAddress) {
+uint32_t ACAN2517::readRegister32Assume_SPI_transaction (const uint16_t inRegisterAddress) {
 //--- Read word register via 6-byte buffer (speed enhancement, thanks to thomasfla)
   uint8_t buff[6] = {0} ;
 //--- Enter command
@@ -878,7 +845,7 @@ uint32_t ACAN2517::readRegisterSPI (const uint16_t inRegisterAddress) {
 
 //----------------------------------------------------------------------------------------------------------------------
 
-void ACAN2517::writeByteRegisterSPI (const uint16_t inRegisterAddress, const uint8_t inValue) {
+void ACAN2517::writeRegister8Assume_SPI_transaction (const uint16_t inRegisterAddress, const uint8_t inValue) {
 //--- Write byte register via 3-byte buffer (speed enhancement, thanks to thomasfla)
   uint8_t buff[3] = {0} ;
   const uint16_t writeCommand = (inRegisterAddress & 0x0FFF) | (0b0010 << 12) ;
@@ -892,7 +859,7 @@ void ACAN2517::writeByteRegisterSPI (const uint16_t inRegisterAddress, const uin
 
 //----------------------------------------------------------------------------------------------------------------------
 
-uint8_t ACAN2517::readByteRegisterSPI (const uint16_t inRegisterAddress) {
+uint8_t ACAN2517::readRegister8Assume_SPI_transaction (const uint16_t inRegisterAddress) {
 //--- Read byte register via 3-byte buffer (speed enhancement, thanks to thomasfla)
   uint8_t buff[3] = {0} ;
   const uint16_t readCommand = (inRegisterAddress & 0x0FFF) | (0b0011 << 12) ;
@@ -908,57 +875,36 @@ uint8_t ACAN2517::readByteRegisterSPI (const uint16_t inRegisterAddress) {
 //   MCP2517FD REGISTER ACCESS, THIRD LEVEL FUNCTIONS
 //----------------------------------------------------------------------------------------------------------------------
 
-void ACAN2517::writeByteRegister (const uint16_t inRegisterAddress, const uint8_t inValue) {
+void ACAN2517::writeRegister8 (const uint16_t inRegisterAddress, const uint8_t inValue) {
   mSPI.beginTransaction (mSPISettings) ;
     #ifdef ARDUINO_ARCH_ESP32
       taskDISABLE_INTERRUPTS () ;
+    #else
+      noInterrupts () ;
     #endif
-      writeByteRegisterSPI (inRegisterAddress, inValue) ;
+      writeRegister8Assume_SPI_transaction (inRegisterAddress, inValue) ;
     #ifdef ARDUINO_ARCH_ESP32
       taskENABLE_INTERRUPTS () ;
+    #else
+      interrupts () ;
     #endif
   mSPI.endTransaction () ;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 
-uint8_t ACAN2517::readByteRegister (const uint16_t inRegisterAddress) {
+uint8_t ACAN2517::readRegister8 (const uint16_t inRegisterAddress) {
   mSPI.beginTransaction (mSPISettings) ;
     #ifdef ARDUINO_ARCH_ESP32
       taskDISABLE_INTERRUPTS () ;
+    #else
+      noInterrupts () ;
     #endif
-      const uint8_t result = readByteRegisterSPI (inRegisterAddress) ;
+      const uint8_t result = readRegister8Assume_SPI_transaction (inRegisterAddress) ;
     #ifdef ARDUINO_ARCH_ESP32
       taskENABLE_INTERRUPTS () ;
-    #endif
-  mSPI.endTransaction () ;
-  return result ;
-}
-
-//----------------------------------------------------------------------------------------------------------------------
-
-void ACAN2517::writeRegister (const uint16_t inRegisterAddress, const uint32_t inValue) {
-  mSPI.beginTransaction (mSPISettings) ;
-    #ifdef ARDUINO_ARCH_ESP32
-      taskDISABLE_INTERRUPTS () ;
-    #endif
-      writeRegisterSPI (inRegisterAddress, inValue) ;
-    #ifdef ARDUINO_ARCH_ESP32
-      taskENABLE_INTERRUPTS () ;
-    #endif
-  mSPI.endTransaction () ;
-}
-
-//----------------------------------------------------------------------------------------------------------------------
-
-uint32_t ACAN2517::readRegister (const uint16_t inRegisterAddress) {
-  mSPI.beginTransaction (mSPISettings) ;
-    #ifdef ARDUINO_ARCH_ESP32
-      taskDISABLE_INTERRUPTS () ;
-    #endif
-      const uint32_t result = readRegisterSPI (inRegisterAddress) ;
-    #ifdef ARDUINO_ARCH_ESP32
-      taskENABLE_INTERRUPTS () ;
+    #else
+      interrupts () ;
     #endif
   mSPI.endTransaction () ;
   return result ;
@@ -966,14 +912,36 @@ uint32_t ACAN2517::readRegister (const uint16_t inRegisterAddress) {
 
 //----------------------------------------------------------------------------------------------------------------------
 
-uint32_t ACAN2517::readErrorCounters (void) {
+void ACAN2517::writeRegister32 (const uint16_t inRegisterAddress, const uint32_t inValue) {
   mSPI.beginTransaction (mSPISettings) ;
     #ifdef ARDUINO_ARCH_ESP32
       taskDISABLE_INTERRUPTS () ;
+    #else
+      noInterrupts () ;
     #endif
-      const uint32_t result = readRegisterSPI (C1BDIAG0_REGISTER) ;
+      writeRegister32Assume_SPI_transaction (inRegisterAddress, inValue) ;
     #ifdef ARDUINO_ARCH_ESP32
       taskENABLE_INTERRUPTS () ;
+    #else
+      interrupts () ;
+    #endif
+  mSPI.endTransaction () ;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+
+uint32_t ACAN2517::readRegister32 (const uint16_t inRegisterAddress) {
+  mSPI.beginTransaction (mSPISettings) ;
+    #ifdef ARDUINO_ARCH_ESP32
+      taskDISABLE_INTERRUPTS () ;
+    #else
+      noInterrupts () ;
+    #endif
+      const uint32_t result = readRegister32Assume_SPI_transaction (inRegisterAddress) ;
+    #ifdef ARDUINO_ARCH_ESP32
+      taskENABLE_INTERRUPTS () ;
+    #else
+      interrupts () ;
     #endif
   mSPI.endTransaction () ;
   return result ;
@@ -991,8 +959,49 @@ void ACAN2517::reset2517FD (void) {
       deassertCS () ;
     #ifdef ARDUINO_ARCH_ESP32
       taskENABLE_INTERRUPTS () ;
+    #else
+      interrupts () ;
     #endif
   mSPI.endTransaction () ;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+
+uint32_t ACAN2517::errorCounters (void) {
+  return readRegister32 (C1TREC_REGISTER) ;
+}
+
+//······················································································································
+//    Current MCP2517FD Operation Mode
+//······················································································································
+
+ACAN2517::OperationMode ACAN2517::currentOperationMode (void) {
+  const uint8_t mode = readRegister8 (C1CON_REGISTER + 2) >> 5 ;
+  return ACAN2517::OperationMode (mode) ;
+}
+
+//······················································································································
+
+bool ACAN2517::recoverFromRestrictedOperationMode (void) {
+   bool recoveryDone = false ;
+   if (currentOperationMode () == ACAN2517::RestrictedOperation) { // In Restricted Operation Mode
+  //----------------------------------- Request mode (CON_REGISTER + 3)
+  //  bits 7-4: Transmit Bandwith Sharing Bits ---> 0
+  //  bit 3: Abort All Pending Transmissions bit --> 0
+    writeRegister8 (C1CON_REGISTER + 3, mRequestedMode);
+  //----------------------------------- Wait (10 ms max) until requested mode is reached
+    bool wait = true ;
+    const uint32_t deadline = millis () + 10 ;
+    while (wait) {
+      const uint8_t actualMode = (readRegister8 (C1CON_REGISTER + 2) >> 5) & 0x07 ;
+      wait = actualMode != (mRequestedMode & 0x07) ;
+      recoveryDone = !wait ;
+      if (wait && (millis () >= deadline)) {
+        wait = false ;
+      }
+    }
+  }
+  return recoveryDone ;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
