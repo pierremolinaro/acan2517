@@ -88,6 +88,8 @@ class ACANBuffer {
       if (mPeakCount < mCount) {
         mPeakCount = mCount ;
       }
+    }else{
+      mPeakCount = mSize + 1 ;
     }
     return ok ;
   }

@@ -373,8 +373,10 @@ uint32_t ACAN2517::begin (const ACAN2517Settings & inSettings,
   //----------------------------------- Configure TXQ and TEF
   // Bit 4: Enable Transmit Queue bit ---> 1: Enable TXQ and reserves space in RAM
   // Bit 3: Store in Transmit Event FIFO bit ---> 0: Don’t save transmitted messages in TEF
-    d = mUsesTXQ ? (1 << 4) : 0x00 ; // Fixed in 1.1.4
-    writeRegister8 (C1CON_REGISTER + 2, d); // DS20005688B, page 24
+  // Bit 0: RTXAT --> 1: Enable CiFIFOCONm.TXAT to control retransmission attempts
+    d = 0x01 ; // Enable RTXAT to limit retransmissions (Flole)
+    d |= mUsesTXQ ? (1 << 4) : 0x00 ; // Fixed in 1.1.4( thanks to danielhenz)
+    writeRegister8 (C1CON_REGISTER + 2, d); // DS20006027A, page 27
   //----------------------------------- Configure RX FIFO (C1FIFOCON, DS20005688B, page 52)
     d = inSettings.mControllerReceiveFIFOSize - 1 ; // Set receive FIFO size
     writeRegister8 (C1FIFOCON_REGISTER (1) + 3, d) ;
@@ -510,7 +512,7 @@ void ACAN2517::appendInControllerTxFIFO (const CANMessage & inMessage) {
 //--- Enter data to send to SPI into a 18-byte buffer (speed enhancement, thanks to thomasfla)
   uint8_t  buff [18] = {0} ;
 //--- Enter command
-  const uint16_t ramAddress = (uint16_t) (0x400 + readRegister32Assume_SPI_transaction (C1FIFOUA_REGISTER (TRANSMIT_FIFO_INDEX))) ;
+  const uint16_t ramAddress = uint16_t (0x400 + readRegister32Assume_SPI_transaction (C1FIFOUA_REGISTER (TRANSMIT_FIFO_INDEX))) ;
   const uint16_t writeCommand = (ramAddress & 0x0FFF) | (0b0010 << 12) ;
   buff[0] = writeCommand >> 8 ;
   buff[1] = writeCommand & 0xFF ;
