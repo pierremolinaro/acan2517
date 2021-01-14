@@ -373,9 +373,9 @@ uint32_t ACAN2517::begin (const ACAN2517Settings & inSettings,
   //----------------------------------- Configure TXQ and TEF
   // Bit 4: Enable Transmit Queue bit ---> 1: Enable TXQ and reserves space in RAM
   // Bit 3: Store in Transmit Event FIFO bit ---> 0: Don’t save transmitted messages in TEF
-  // Bit 0: RTXAT --> 1: Enable CiFIFOCONm.TXAT to control retransmission attempts
+  // Bit 0: RTXAT ---> 1: Enable CiFIFOCONm.TXAT to control retransmission attempts
     d = 0x01 ; // Enable RTXAT to limit retransmissions (Flole)
-    d |= mUsesTXQ ? (1 << 4) : 0x00 ; // Fixed in 1.1.4( thanks to danielhenz)
+    d |= mUsesTXQ ? (1 << 4) : 0x00 ; // Fixed in 1.1.4 (thanks to danielhenz)
     writeRegister8 (C1CON_REGISTER + 2, d); // DS20006027A, page 27
   //----------------------------------- Configure RX FIFO (C1FIFOCON, DS20005688B, page 52)
     d = inSettings.mControllerReceiveFIFOSize - 1 ; // Set receive FIFO size
@@ -1008,8 +1008,9 @@ bool ACAN2517::recoverFromRestrictedOperationMode (void) {
 
 //----------------------------------------------------------------------------------------------------------------------
 
-uint32_t ACAN2517FD::diagInfos(void) {
-    return readRegister32(BDIAG1_REGISTER);
+uint32_t ACAN2517::diagInfos (const int inIndex) { // thanks to Flole998 and turmary
+  return readRegister32 (inIndex ? C1BDIAG1_REGISTER: C1BDIAG0_REGISTER) ;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
+
