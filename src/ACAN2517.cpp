@@ -361,8 +361,7 @@ uint32_t ACAN2517::begin (const ACAN2517Settings & inSettings,
     }
     writeRegister8 (IOCON_REGISTER + 3, d); // DS20005688B, page 18
   //----------------------------------- Configure TXQ
-    d = inSettings.mControllerTXQBufferRetransmissionAttempts ;
-    d <<= 5 ;
+    d = inSettings.mControllerTXQBufferRetransmissionAttempts << 5 ;
     d |= inSettings.mControllerTXQBufferPriority ;
     writeRegister8 (C1TXQCON_REGISTER + 2, d); // DS20005688B, page 48
   // Bit 5-7: Payload Size bits ---> 0: 8 data bytes
@@ -370,26 +369,26 @@ uint32_t ACAN2517::begin (const ACAN2517Settings & inSettings,
     mUsesTXQ = inSettings.mControllerTXQSize > 0 ;
     d = inSettings.mControllerTXQSize - 1 ;
     writeRegister8 (C1TXQCON_REGISTER + 3, d); // DS20005688B, page 48
-  //----------------------------------- Configure TXQ and TEF
+  //----------------------------------- Configure TXQ and TEF (C1CON, page 24)
   // Bit 4: Enable Transmit Queue bit ---> 1: Enable TXQ and reserves space in RAM
   // Bit 3: Store in Transmit Event FIFO bit ---> 0: Don’t save transmitted messages in TEF
   // Bit 0: RTXAT ---> 1: Enable CiFIFOCONm.TXAT to control retransmission attempts
     d = 0x01 ; // Enable RTXAT to limit retransmissions (Flole)
     d |= mUsesTXQ ? (1 << 4) : 0x00 ; // Fixed in 1.1.4 (thanks to danielhenz)
-    writeRegister8 (C1CON_REGISTER + 2, d); // DS20006027A, page 27
+    writeRegister8 (C1CON_REGISTER + 2, d) ; // DS20006027A, page 27
   //----------------------------------- Configure RX FIFO (C1FIFOCON, DS20005688B, page 52)
     d = inSettings.mControllerReceiveFIFOSize - 1 ; // Set receive FIFO size
-    writeRegister8 (C1FIFOCON_REGISTER (1) + 3, d) ;
+    writeRegister8 (C1FIFOCON_REGISTER (RECEIVE_FIFO_INDEX) + 3, d) ;
     d = 1 ; // Interrupt Enabled for FIFO not Empty (TFNRFNIE)
-    writeRegister8 (C1FIFOCON_REGISTER (1), d) ;
+    writeRegister8 (C1FIFOCON_REGISTER (RECEIVE_FIFO_INDEX), d) ;
   //----------------------------------- Configure TX FIFO (C1FIFOCON, DS20005688B, page 52)
-    d = inSettings.mControllerTransmitFIFORetransmissionAttempts ;
-    d <<= 5 ;
-    d |= inSettings.mControllerTransmitFIFOPriority ;
+    d = uint8_t (inSettings.mControllerTransmitFIFORetransmissionAttempts) << 5 ;
+    d |=  inSettings.mControllerTransmitFIFOPriority ;
     writeRegister8 (C1FIFOCON_REGISTER (TRANSMIT_FIFO_INDEX) + 2, d) ;
     d = inSettings.mControllerTransmitFIFOSize - 1 ; // Set transmit FIFO size
     writeRegister8 (C1FIFOCON_REGISTER (TRANSMIT_FIFO_INDEX) + 3, d) ;
-    d = 1 << 7 ; // FIFO 2 is a Tx FIFO
+    d = 1 << 7 ; // FIFO is a Tx FIFO
+    d |= 1 << 4 ; // TXATIE ---> 1: Enable Transmit Attempts Exhausted Interrupt
     writeRegister8 (C1FIFOCON_REGISTER (TRANSMIT_FIFO_INDEX), d) ;
   //----------------------------------- Configure receive filters
     uint8_t filterIndex = 0 ;
@@ -409,7 +408,8 @@ uint32_t ACAN2517::begin (const ACAN2517Settings & inSettings,
     d  = (1 << 1) ; // Receive FIFO Interrupt Enable
     d |= (1 << 0) ; // Transmit FIFO Interrupt Enable
     writeRegister8 (C1INT_REGISTER + 2, d) ;
-    writeRegister8 (C1INT_REGISTER + 3, 0) ;
+    d  = (1 << 2) ; // TXATIE ---> 1: Transmit Attempt Interrupt Enable bit
+    writeRegister8 (C1INT_REGISTER + 3, d) ;
   //----------------------------------- Program nominal data rate (C1NBTCFG register)
   //  bits 31-24: BRP - 1
   //  bits 23-16: TSEG1 - 1
@@ -498,7 +498,8 @@ bool ACAN2517::enterInTransmitBuffer (const CANMessage & inMessage) {
     const uint8_t status = readRegister8Assume_SPI_transaction (C1FIFOSTA_REGISTER (TRANSMIT_FIFO_INDEX)) ;
     if ((status & 1) == 0) { // FIFO is full
       uint8_t d = 1 << 7 ;  // FIFO is a transmit FIFO
-      d |= 1 ; // Enable "FIFO not full" interrupt
+      d |= 1 << 0 ; // Enable "FIFO not full" interrupt
+      d |= 1 << 4 ; // TXATIE ---> 1: Enable Transmit Attempts Exhausted Interrupt
       writeRegister8Assume_SPI_transaction (C1FIFOCON_REGISTER (TRANSMIT_FIFO_INDEX), d) ;
       mHardwareTxFIFOFull = true ;
     }
@@ -547,44 +548,54 @@ void ACAN2517::appendInControllerTxFIFO (const CANMessage & inMessage) {
 //----------------------------------------------------------------------------------------------------------------------
 
 bool ACAN2517::sendViaTXQ (const CANMessage & inMessage) {
-//--- Enter message only if TXQ FIFO is not full (see DS20005688B, page 50)
-  const bool TXQNotFull = mUsesTXQ && (readRegister8Assume_SPI_transaction (C1TXQSTA_REGISTER) & 1) != 0 ;
-  if (TXQNotFull) {
-  //--- Enter data to send to SPI into a 18-byte buffer (speed enhancement, thanks to thomasfla)
-    uint8_t  buff [18] = {0} ;
-  //--- Enter command
-    const uint16_t ramAddress = (uint16_t) (0x400 + readRegister32Assume_SPI_transaction (C1TXQUA_REGISTER)) ;
-    const uint16_t writeCommand = (ramAddress & 0x0FFF) | (0b0010 << 12) ;
-    buff[0] = writeCommand >> 8 ;
-    buff[1] = writeCommand & 0xFF ;
-  //--- Write identifier: if an extended frame is sent, identifier bits sould be reordered (see DS20005678B, page 27)
-    uint32_t idf = inMessage.id ;
-    if (inMessage.ext) {
-      idf = ((inMessage.id >> 18) & 0x7FF) | ((inMessage.id & 0x3FFFF) << 11) ;
+  bool ok = mUsesTXQ ;
+  if (ok) {
+    uint8_t sta = readRegister8Assume_SPI_transaction (C1TXQSTA_REGISTER) ;
+  //--- Check Transmit Attempts Exhausted Interrupt Pending bit
+    ok = (sta & (1 << 4)) != 0 ;
+    if (ok) {
+      writeRegister8Assume_SPI_transaction (C1TXQSTA_REGISTER, ~ (1 << 4)) ;
+    }else{
+    //--- Enter message only if TXQ FIFO is not full (see DS20005688B, page 50)
+      ok = (sta & 1) != 0 ;
     }
-    enterWordInBufferAtIndex (idf, buff, 2) ;
-  //--- Write DLC, RTR, IDE bits
-    uint32_t parameters = (inMessage.len > 8) ? 8 : inMessage.len ;
-    if (inMessage.rtr) {
-      parameters |= 1 << 5 ; // Set RTR bit
+    if (ok) {
+    //--- Enter data to send to SPI into a 18-byte buffer (speed enhancement, thanks to thomasfla)
+      uint8_t  buff [18] = {0} ;
+    //--- Enter command
+      const uint16_t ramAddress = (uint16_t) (0x400 + readRegister32Assume_SPI_transaction (C1TXQUA_REGISTER)) ;
+      const uint16_t writeCommand = (ramAddress & 0x0FFF) | (0b0010 << 12) ;
+      buff[0] = writeCommand >> 8 ;
+      buff[1] = writeCommand & 0xFF ;
+    //--- Write identifier: if an extended frame is sent, identifier bits sould be reordered (see DS20005678B, page 27)
+      uint32_t idf = inMessage.id ;
+      if (inMessage.ext) {
+        idf = ((inMessage.id >> 18) & 0x7FF) | ((inMessage.id & 0x3FFFF) << 11) ;
+      }
+      enterWordInBufferAtIndex (idf, buff, 2) ;
+    //--- Write DLC, RTR, IDE bits
+      uint32_t parameters = (inMessage.len > 8) ? 8 : inMessage.len ;
+      if (inMessage.rtr) {
+        parameters |= 1 << 5 ; // Set RTR bit
+      }
+      if (inMessage.ext) {
+        parameters |= 1 << 4 ; // Set EXT bit
+      }
+      enterWordInBufferAtIndex (parameters, buff, 6) ;
+    //--- Enter frame data
+      for (uint32_t i=0 ; i<8 ; i++) {
+        buff [10 + i] = inMessage.data [i] ;
+      }
+    //--- Send via SPI
+      assertCS () ;
+        mSPI.transfer (buff, 18) ;
+      deassertCS () ;
+    //--- Increment FIFO, send message (see DS20005688B, page 48)
+      const uint8_t d = (1 << 0) | (1 << 1) ; // Set UINC bit, TXREQ bit
+      writeRegister8Assume_SPI_transaction (C1TXQCON_REGISTER + 1, d);
     }
-    if (inMessage.ext) {
-      parameters |= 1 << 4 ; // Set EXT bit
-    }
-    enterWordInBufferAtIndex (parameters, buff, 6) ;
-  //--- Enter frame data
-    for (uint32_t i=0 ; i<8 ; i++) {
-      buff [10 + i] = inMessage.data [i] ;
-    }
-  //--- Send via SPI
-    assertCS () ;
-      mSPI.transfer (buff, 18) ;
-    deassertCS () ;
-  //--- Increment FIFO, send message (see DS20005688B, page 48)
-    const uint8_t d = (1 << 0) | (1 << 1) ; // Set UINC bit, TXREQ bit
-    writeRegister8Assume_SPI_transaction (C1TXQCON_REGISTER + 1, d);
   }
-  return TXQNotFull ;
+  return ok ;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -710,7 +721,12 @@ bool ACAN2517::isr_core (void) {
         receiveInterrupt () ;
         handled = true ;
       }
-      if ((intReg & (1 << 0)) != 0) { // Transmit FIFO interrupt
+      if ((intReg & (1 << 10)) != 0) { // Transmit Attempt interrupt
+      //--- Clear Pending Transmit Attempt interrupt bit
+        writeRegister8Assume_SPI_transaction (C1FIFOSTA_REGISTER (TRANSMIT_FIFO_INDEX), ~ (1 << 4)) ;
+        transmitInterrupt () ;
+        handled = true ;
+      }else if ((intReg & (1 << 0)) != 0) { // Transmit FIFO interrupt
         transmitInterrupt () ;
         handled = true ;
       }
@@ -745,8 +761,9 @@ void ACAN2517::transmitInterrupt (void) {
   if (hasMessage) {
     appendInControllerTxFIFO (message) ;
   }else{ // No message in transmit FIFO: disable "FIFO not full" interrupt
-    const uint8_t data8 = 1 << 7 ;  // FIFO is a transmit FIFO
-    writeRegister8Assume_SPI_transaction (C1FIFOCON_REGISTER (TRANSMIT_FIFO_INDEX), data8) ;
+    uint8_t d = 1 << 7 ;  // FIFO is a transmit FIFO
+    d |= 1 << 4 ; // TXATIE ---> 1: Enable Transmit Attempts Exhausted Interrupt
+    writeRegister8Assume_SPI_transaction (C1FIFOCON_REGISTER (TRANSMIT_FIFO_INDEX), d) ;
     mHardwareTxFIFOFull = false ;
   }
 }
@@ -987,7 +1004,7 @@ ACAN2517::OperationMode ACAN2517::currentOperationMode (void) {
 bool ACAN2517::recoverFromRestrictedOperationMode (void) {
    bool recoveryDone = false ;
    if (currentOperationMode () == ACAN2517::RestrictedOperation) { // In Restricted Operation Mode
-  //----------------------------------- Request mode (CON_REGISTER + 3)
+  //----------------------------------- Request mode (C1CON_REGISTER + 3)
   //  bits 7-4: Transmit Bandwith Sharing Bits ---> 0
   //  bit 3: Abort All Pending Transmissions bit --> 0
     writeRegister8 (C1CON_REGISTER + 3, mRequestedMode);
@@ -1013,4 +1030,3 @@ uint32_t ACAN2517::diagInfos (const int inIndex) { // thanks to Flole998 and tur
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-
