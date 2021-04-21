@@ -3,7 +3,7 @@
 
 ### Compatibility with the other ACAN libraries
 
-This library is fully compatible with the Teensy 3.x ACAN library [https://github.com/pierremolinaro/acan](), ACAN2515 library [https://github.com/pierremolinaro/acan2515](), and the ACAN2517FD library [https://github.com/pierremolinaro/acan2517](), it uses a very similar API and the same `CANMessage` class for handling messages.
+This library is fully compatible with the Teensy 3.x ACAN library https://github.com/pierremolinaro/acan, ACAN2515 library https://github.com/pierremolinaro/acan2515, and the ACAN2517FD library https://github.com/pierremolinaro/acan2517, it uses a very similar API and the same `CANMessage` class for handling messages.
 
 ### ACAN2517 library description
 ACAN2517 is a driver for the MCP2517FD CAN Controller, in CAN 2.0B mode. It runs on any Arduino compatible board.
