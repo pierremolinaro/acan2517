@@ -64,7 +64,7 @@ class ACANBuffer {
 //······················································································································
 
   public: void initWithSize (const uint32_t inSize) {
-    mBuffer = new CANMessage [inSize] ;
+    delete [] mBuffer ; mBuffer = new CANMessage [inSize] ;
     mSize = inSize ;
     mReadIndex = 0 ;
     mWriteIndex = 0 ;

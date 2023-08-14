@@ -15,7 +15,7 @@
 // Select CAN baud rate.
 // Select a baud rate common to the MCP2515 and the MCP2517FD
 
-static const uint32_t CAN_BIT_RATE = 1000 * 1000 ;
+static const uint32_t CAN_BIT_RATE = 1000UL * 1000UL ;
 
 //——————————————————————————————————————————————————————————————————————————————
 //  MCP2517 connections: adapt theses settings to your design
@@ -93,10 +93,27 @@ void setup () {
 //--- Begin SPI
   SPI1.begin () ;
 //--- Configure ACAN2517
-  ACAN2517Settings settings2517 (ACAN2517Settings::OSC_4MHz10xPLL, CAN_BIT_RATE) ;
+  Serial.println ("Configure ACAN2517") ;
+  ACAN2517Settings settings2517 (ACAN2517Settings::OSC_4MHz10xPLL_DIVIDED_BY_2, CAN_BIT_RATE) ;
   const uint32_t errorCode2517 = can2517.begin (settings2517, [] { can2517.isr () ; }) ;
   if (errorCode2517 == 0) {
-    Serial.println ("ACAN2517 configuration: ok") ;
+    Serial.println ("  ACAN2517 configuration: ok") ;
+    Serial.print ("  Bit Rate prescaler: ") ;
+    Serial.println (settings2517.mBitRatePrescaler) ;
+    Serial.print ("  Phase segment 1: ") ;
+    Serial.println (settings2517.mPhaseSegment1) ;
+    Serial.print ("  Phase segment 2: ") ;
+    Serial.println (settings2517.mPhaseSegment2) ;
+    Serial.print ("  SJW:") ;
+    Serial.println (settings2517.mSJW) ;
+    Serial.print ("  Actual Bit Rate: ") ;
+    Serial.print (settings2517.actualBitRate ()) ;
+    Serial.println (" bit/s") ;
+    Serial.print ("  Exact Bit Rate ? ") ;
+    Serial.println (settings2517.exactBitRate () ? "yes" : "no") ;
+    Serial.print ("  Sample point: ") ;
+    Serial.print (settings2517.samplePointFromBitStart ()) ;
+    Serial.println ("%") ;
   }else{
     Serial.print ("ACAN2517 configuration error 0x") ;
     Serial.println (errorCode2517, HEX) ;
@@ -113,7 +130,27 @@ void setup () {
   Serial.println ("Configure ACAN2515") ;
   ACAN2515Settings settings2515 (MCP2515_QUARTZ_FREQUENCY, CAN_BIT_RATE) ;
   const uint32_t errorCode2515 = can2515.begin (settings2515, [] {can2515.isr () ; }) ;
-  if (errorCode2515 != 0) {
+  if (errorCode2515 == 0) {
+    Serial.println ("  ACAN2515 configuration: ok") ;
+    Serial.print ("  Bit Rate prescaler: ") ;
+    Serial.println (settings2515.mBitRatePrescaler) ;
+    Serial.print ("  Propagation segment: ") ;
+    Serial.println (settings2515.mPropagationSegment) ;
+    Serial.print ("  Phase segment 1: ") ;
+    Serial.println (settings2515.mPhaseSegment1) ;
+    Serial.print ("  Phase segment 2: ") ;
+    Serial.println (settings2515.mPhaseSegment2) ;
+    Serial.print ("  SJW:") ;
+    Serial.println (settings2515.mSJW) ;
+    Serial.print ("  Actual Bit Rate: ") ;
+    Serial.print (settings2515.actualBitRate ()) ;
+    Serial.println (" bit/s") ;
+    Serial.print ("  Exact Bit Rate ? ") ;
+    Serial.println (settings2515.exactBitRate () ? "yes" : "no") ;
+    Serial.print ("  Sample point: ") ;
+    Serial.print (settings2515.samplePointFromBitStart ()) ;
+    Serial.println ("%") ;
+  }else{
     Serial.print ("Configuration error 0x") ;
     Serial.println (errorCode2515, HEX) ;
   }
@@ -122,12 +159,12 @@ void setup () {
 //——————————————————————————————————————————————————————————————————————————————
 
 static uint32_t gBlinkLedDate = 0 ;
-static uint32_t gReceivedFrameCount = 0 ;
+static uint32_t gReceivedFrameCount2515 = 0 ;
 static uint32_t gReceivedFrameCount2517 = 0 ;
-static uint32_t gSentFrameCount = 0 ;
+static uint32_t gSentFrameCount2515 = 0 ;
 static uint32_t gSentFrameCount2517 = 0 ;
 
-static const uint32_t MESSAGE_COUNT = 10UL * 1000 ;
+static const uint32_t MESSAGE_COUNT = 1000UL * 1000 ;
 
 //——————————————————————————————————————————————————————————————————————————————
 // A CAN network requires that stations do not send frames with the same identifier.
@@ -140,9 +177,9 @@ void loop () {
   if (gBlinkLedDate < millis ()) {
     gBlinkLedDate += 1000 ;
     digitalWrite (LED_BUILTIN, !digitalRead (LED_BUILTIN)) ;
-    Serial.print (gSentFrameCount) ;
+    Serial.print (gSentFrameCount2515) ;
     Serial.print (" ") ;
-    Serial.print (gReceivedFrameCount) ;
+    Serial.print (gReceivedFrameCount2515) ;
     Serial.print (" ") ;
     Serial.print (gSentFrameCount2517) ;
     Serial.print (" ") ;
@@ -166,7 +203,7 @@ void loop () {
     }
   }
 //--- Send messages via the MCP2515, trying all transmit buffers
-  if (gSentFrameCount < MESSAGE_COUNT) {
+  if (gSentFrameCount2515 < MESSAGE_COUNT) {
   //--- Make an odd identifier for builtin CAN0
     frame.id = millis () & 0x7FE ;
     frame.id |= 1 ;
@@ -174,24 +211,23 @@ void loop () {
   //--- Send frame via the MCP2515, using transmit buffer 0
     bool ok = can2515.tryToSend (frame) ;
     if (ok) {
-      gSentFrameCount += 1 ;
+      gSentFrameCount2515 += 1 ;
     }
   //--- Send frame via the MCP2515, using transmit buffer 1
     frame.idx = 1 ;
     ok = can2515.tryToSend (frame) ;
     if (ok) {
-      gSentFrameCount += 1 ;
+      gSentFrameCount2515 += 1 ;
     }
   //--- Send frame via the MCP2515, using transmit buffer 2
     frame.idx = 2 ;
     ok = can2515.tryToSend (frame) ;
     if (ok) {
-      gSentFrameCount += 1 ;
+      gSentFrameCount2515 += 1 ;
     }
   }
 //--- Receive frame from MCP2517
   if (can2517.receive (frame)) {
-//    can.receive (frame) ;
     gReceivedFrameCount2517 ++ ;
   }
 //--- Receive frame via builtin CAN0
@@ -204,7 +240,7 @@ void loop () {
     if (!ok) {
       Serial.println ("RECEIVED DATA ERROR") ;
     }
-    gReceivedFrameCount ++ ;
+    gReceivedFrameCount2515 ++ ;
   }
 }
 
