@@ -445,7 +445,7 @@ uint32_t ACAN2517::begin (const ACAN2517Settings & inSettings,
       }
     }
     #ifdef ARDUINO_ARCH_ESP32
-      xTaskCreate (myESP32Task, "ACAN2517Handler", 1024, this, 256, NULL) ;
+      xTaskCreate (myESP32Task, "ACAN2517Handler", 1024, this, 20, NULL) ;
     #endif
     if (mINT != 255) { // 255 means interrupt is not used
       #ifdef ARDUINO_ARCH_ESP32
