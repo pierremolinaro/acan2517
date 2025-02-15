@@ -7,6 +7,11 @@
 
 #include <ACAN2517.h>
 
+// The Uno R4 does not define NOT_AN_INTERRUPT
+#ifndef NOT_AN_INTERRUPT
+#define NOT_AN_INTERRUPT -1
+#endif
+
 //------------------------------------------------------------------------------
 // Note about ESP32
 //------------------------------------------------------------------------------
