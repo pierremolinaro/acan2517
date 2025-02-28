@@ -1,15 +1,15 @@
-//----------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 // A CAN driver for MCP2517 (CAN 2.0B mode)
 // by Pierre Molinaro
 // https://github.com/pierremolinaro/acan2517
 //
-//----------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 #include <ACAN2517Settings.h>
 
-//----------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 //    sysClock
-//----------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 uint32_t ACAN2517Settings::sysClock (const Oscillator inOscillator) {
   uint32_t sysClock = 40UL * 1000 * 1000 ;
@@ -35,9 +35,9 @@ uint32_t ACAN2517Settings::sysClock (const Oscillator inOscillator) {
   return sysClock ;
 }
 
-//----------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 //   CONSTRUCTOR
-//----------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 ACAN2517Settings::ACAN2517Settings (const Oscillator inOscillator,
                                     const uint32_t inDesiredBitRate,
@@ -100,23 +100,23 @@ mOscillator (inOscillator) {
   mBitRateClosedToDesiredRate = (diff * ppm) <= (((uint64_t) W) * inTolerancePPM) ;
 } ;
 
-//----------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 //   ACCESSORS
-//----------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 uint32_t ACAN2517Settings::actualBitRate (void) const {
   const uint32_t TQCount = 1 /* Sync Seg */ + mPhaseSegment1 + mPhaseSegment2 ;
   return mSysClock / mBitRatePrescaler / TQCount ;
 }
 
-//----------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 bool ACAN2517Settings::exactBitRate (void) const {
   const uint32_t TQCount = 1 /* Sync Seg */ + mPhaseSegment1 + mPhaseSegment2 ;
   return mSysClock == (mBitRatePrescaler * mDesiredBitRate * TQCount) ;
 }
 
-//----------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 uint32_t ACAN2517Settings::ppmFromDesiredBitRate (void) const {
   const uint32_t TQCount = 1 /* Sync Seg */ + mPhaseSegment1 + mPhaseSegment2 ;
@@ -126,7 +126,7 @@ uint32_t ACAN2517Settings::ppmFromDesiredBitRate (void) const {
   return (uint32_t) ((diff * ppm) / W) ;
 }
 
-//----------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 uint32_t ACAN2517Settings::samplePointFromBitStart (void) const {
   const uint32_t TQCount = 1 /* Sync Seg */ + mPhaseSegment1 + mPhaseSegment2 ;
@@ -135,7 +135,7 @@ uint32_t ACAN2517Settings::samplePointFromBitStart (void) const {
   return (samplePoint * partPerCent) / TQCount ;
 }
 
-//----------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 uint32_t ACAN2517Settings::CANBitSettingConsistency (void) const {
   uint32_t errorCode = 0 ; // Means no error
@@ -168,7 +168,7 @@ uint32_t ACAN2517Settings::CANBitSettingConsistency (void) const {
   return errorCode ;
 }
 
-//----------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 uint32_t ACAN2517Settings::ramUsage (void) const {
   uint32_t result = 0 ;
@@ -182,5 +182,5 @@ uint32_t ACAN2517Settings::ramUsage (void) const {
   return result ;
 }
 
-//----------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 

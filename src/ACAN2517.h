@@ -1,36 +1,36 @@
-//----------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 // A CAN driver for MCP2517FD, CAN 2.0B mode
 // by Pierre Molinaro
 // https://github.com/pierremolinaro/acan2517
 //
-//----------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 #pragma once
 
-//----------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 #include <ACAN2517Settings.h>
 #include <ACAN2517_ACANBuffer.h>
 #include <ACAN2517Filters.h>
 #include <SPI.h>
 
-//----------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 //   ACAN2517 class
-//----------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 class ACAN2517 {
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //   CONSTRUCTOR
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public: ACAN2517 (const uint8_t inCS, // CS input of MCP2517FD
                     SPIClass & inSPI, // Hardware SPI object
                     const uint8_t inINT) ; // INT output of MCP2517FD
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //   begin method (returns 0 if no error)
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public: uint32_t begin (const ACAN2517Settings & inSettings,
                           void (* inInterruptServiceRoutine) (void)) ;
@@ -61,15 +61,15 @@ class ACAN2517 {
   public: static const uint32_t kReadBackErrorWithFullSpeedSPIClock = uint32_t (1) << 18 ;
   public: static const uint32_t kISRNotNullAndNoIntPin              = uint32_t (1) << 19 ;
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //   Send a message
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public: bool tryToSend (const CANMessage & inMessage) ;
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //    Receive a message
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public: bool receive (CANMessage & outMessage) ;
   public: bool available (void) ;
@@ -79,9 +79,9 @@ class ACAN2517 {
 //--- Call back function array
   private: ACANCallBackRoutine * mCallBackFunctionArray = NULL ;
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //    Private properties
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   private: SPISettings mSPISettings ;
   private: SPIClass & mSPI ;
@@ -92,9 +92,9 @@ class ACAN2517 {
   private: uint8_t mRequestedMode ;
   private: uint8_t mHardwareReceiveBufferOverflowCount ;
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //    Receive buffer
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   private: ACANBuffer mDriverReceiveBuffer ;
 
@@ -102,9 +102,9 @@ class ACAN2517 {
 
   public: uint8_t hardwareReceiveBufferOverflowCount (void) const { return mHardwareReceiveBufferOverflowCount ; }
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //    Transmit buffer
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   private: ACANBuffer mDriverTransmitBuffer ;
 
@@ -114,15 +114,15 @@ class ACAN2517 {
 
   public: uint32_t driverTransmitBufferPeakCount (void) const { return mDriverTransmitBuffer.peakCount () ; }
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //    Get error counters
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public: uint32_t errorCounters (void) ;
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //    Current MCP2517FD Operation Mode
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public: typedef enum : uint8_t {
     NormalFD = 0,
@@ -137,15 +137,15 @@ class ACAN2517 {
 
   public: OperationMode currentOperationMode (void) ;
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //    Recovery from Restricted Operation Mode
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public: bool recoverFromRestrictedOperationMode (void) ;
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //    Private methods
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   private: void writeRegister32Assume_SPI_transaction (const uint16_t inRegisterAddress, const uint32_t inValue) ;
   private: uint32_t readRegister32Assume_SPI_transaction (const uint16_t inRegisterAddress) ;
@@ -164,23 +164,23 @@ class ACAN2517 {
   private: bool enterInTransmitBuffer (const CANMessage & inMessage) ;
   private: void appendInControllerTxFIFO (const CANMessage & inMessage) ;
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //    Polling
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public: void poll (void) ;
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //    Get diagnostic information (thanks to Flole998 and turmary)
   // inIndex == 0 returns BDIAG0_REGISTER
   // inIndex != 0 returns BDIAG1_REGISTER
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public: uint32_t diagInfos (const int inIndex = 1) ;
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //    Interrupt service routine
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public: void isr (void) ;
   public: bool isr_core (void) ;
@@ -190,9 +190,9 @@ class ACAN2517 {
     public: SemaphoreHandle_t mISRSemaphore ;
   #endif
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //    GPIO
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public: void gpioSetMode (const uint8_t inPin, const uint8_t inMode) ;
 
@@ -202,16 +202,16 @@ class ACAN2517 {
 
   public: void configureGPIO0AsXSTBY (void) ;
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //    No copy
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   private: ACAN2517 (const ACAN2517 &) = delete ;
   private: ACAN2517 & operator = (const ACAN2517 &) = delete ;
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 } ;
 
-//----------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 

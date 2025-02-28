@@ -1,25 +1,25 @@
-//----------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 // A CAN driver for MCP2517 (CAN 2.0B mode)
 // by Pierre Molinaro
 // https://github.com/pierremolinaro/acan2517
 //
-//----------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 #pragma once
 
-//----------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 #include <stdint.h>
 
-//----------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 //  ACAN2517Settings class
-//----------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 class ACAN2517Settings {
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //   ENUMERATED TYPES
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public: typedef enum : uint8_t {
     OSC_4MHz,
@@ -52,17 +52,17 @@ class ACAN2517Settings {
     UnlimitedNumber
   } RetransmissionAttempts ;
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //   CONSTRUCTOR
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public: ACAN2517Settings (const Oscillator inOscillator,
                             const uint32_t inDesiredBitRate,
                             const uint32_t inTolerancePPM = 1000) ;
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //   CAN BIT TIMING
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   private: uint32_t mSysClock ; // In Hz
   public: const uint32_t mDesiredBitRate ; // In kb/s
@@ -73,33 +73,33 @@ class ACAN2517Settings {
   private: Oscillator mOscillator ;
   public: bool mBitRateClosedToDesiredRate = false ; // The above configuration is not correct
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //    MCP2517FD TXCAN pin is Open Drain ?
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public: bool mTXCANIsOpenDrain = false ; // false --> Push/Pull Output, true --> Open Drain Output
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //    MCP2517FD INT pin is Open Drain ?
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public: bool mINTIsOpenDrain = false ; // false --> Push/Pull Output, true --> Open Drain Output
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //    CLKO pin function (default value is MCP2517FD power on setting)
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public: CLKOpin mCLKOPin = CLKO_DIVIDED_BY_10 ;
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //    Requested mode
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public: RequestedMode mRequestedMode = Normal20B ;
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //   TRANSMIT FIFO
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 //--- Driver transmit buffer size
   public: uint16_t mDriverTransmitFIFOSize = 16 ; // >= 0
@@ -113,9 +113,9 @@ class ACAN2517Settings {
 //--- Controller transmit FIFO retransmission attempts
   public: RetransmissionAttempts mControllerTransmitFIFORetransmissionAttempts = UnlimitedNumber ;
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //   TXQ BUFFER
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 //--- TXQ buffer size (0 --> TXQ disabled)
   public: uint8_t mControllerTXQSize = 0 ; // 0 ... 32
@@ -128,9 +128,9 @@ class ACAN2517Settings {
   public: RetransmissionAttempts mControllerTXQBufferRetransmissionAttempts = UnlimitedNumber ;
 
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //   RECEIVE FIFO
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 //--- Driver receive buffer size
   public: uint16_t mDriverReceiveFIFOSize = 32 ; // > 0
@@ -138,15 +138,15 @@ class ACAN2517Settings {
 //--- Controller receive FIFO size
   public: uint8_t mControllerReceiveFIFOSize = 32 ; // 1 ... 32
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //    SYSCLOCK frequency computation
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public: static uint32_t sysClock (const Oscillator inOscillator) ;
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //    Accessors
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public: Oscillator oscillator (void) const { return mOscillator ; }
   public: uint32_t sysClock (void) const { return mSysClock ; }
@@ -154,27 +154,27 @@ class ACAN2517Settings {
   public: uint32_t actualBitRate (void) const ;
   public: bool exactBitRate (void) const ;
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //    Distance between actual bit rate and requested bit rate (in ppm, part-per-million)
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public: uint32_t ppmFromDesiredBitRate (void) const ;
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //    Distance of sample point from bit start (in ppc, part-per-cent, denoted by %)
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public: uint32_t samplePointFromBitStart (void) const ;
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //    Bit settings are consistent ? (returns 0 if ok)
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public: uint32_t CANBitSettingConsistency (void) const ;
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   //    Constants returned by CANBitSettingConsistency
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public: static const uint32_t kBitRatePrescalerIsZero                 = 1 <<  0 ;
   public: static const uint32_t kBitRatePrescalerIsGreaterThan256       = 1 <<  1 ;
@@ -187,18 +187,18 @@ class ACAN2517Settings {
   public: static const uint32_t kSJWIsGreaterThanPhaseSegment1          = 1 <<  8 ;
   public: static const uint32_t kSJWIsGreaterThanPhaseSegment2          = 1 <<  9 ;
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // Max values
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
   public: static const uint16_t MAX_BRP             = 256 ;
   public: static const uint16_t MAX_PHASE_SEGMENT_1 = 256 ;
   public: static const uint8_t  MAX_PHASE_SEGMENT_2 = 128 ;
   public: static const uint8_t  MAX_SJW             = 128 ;
 
-  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 } ;
 
-//----------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
